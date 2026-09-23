@@ -1,0 +1,11 @@
+{
+  "identifier": "dwo-main",
+  "description": "DWO main capability",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "shell:default",
+    "fs:default",
+    "dialog:default"
+  ]
+}

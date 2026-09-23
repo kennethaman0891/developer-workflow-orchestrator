@@ -1,0 +1,38 @@
+# Dependencies
+node_modules
+
+# Build outputs
+.next
+out
+dist
+build
+
+# Rust / Tauri build artifacts
+src-tauri/target
+src-tauri/gen
+src-tauri/vendor
+Cargo.lock.bak
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Tool / cache directories
+.freebuff
+.fcl
+
+# Environment / secrets (never commit real .env)
+.env
+.env.*
+!.env.example
+*.local
+
+# Local runtime state
+data/
+
+# Backup / patch files
+*.bak
+*.orig
+*.rej
+
+# OS files
+.DS_Store
