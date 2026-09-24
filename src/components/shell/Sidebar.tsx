@@ -412,11 +412,11 @@ export function Sidebar({
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
           {[
-            { id: 'workspace' as ViewId, label: 'Workspace', iconPath: 'M3 2l9 4v8H3V2zm0 0l6-3 6 3M3 2h10' },
-            { id: 'projects' as ViewId, label: 'Projects', iconPath: 'M2 3h10l1 1v9H1V4l1-1z' },
-            { id: 'ide' as ViewId, label: 'IDE', iconPath: 'M13.5 2.5l-9 9-3.5 1 1-3.5 9-9a1.06 1.06 0 011.5 1.5z' },
-            { id: 'collaboration' as ViewId, label: 'Collab', iconPath: 'M12 5a2 2 0 11-4 0 2 2 0 014 0zM5 6a2 2 0 11-4 0 2 2 0 014 0zM12 13c-3 0-5-1.5-5-3s2-3 5-3' },
-            { id: 'settings' as ViewId, label: 'Settings', iconPath: 'M8 2l1.5 1.5M13 8l-1.5 1M8 14l-1.5-1.5M5 8l1.5-1M8 2a6 6 0 016 6 6 6 0 01-6 6 6 6 0 01-6-6 6 6 0 016-6z' },
+            { id: 'workspace' as ViewId, label: 'Workspace' },
+            { id: 'projects' as ViewId, label: 'Projects' },
+            { id: 'ide' as ViewId, label: 'IDE' },
+            { id: 'collaboration' as ViewId, label: 'Collab' },
+            { id: 'settings' as ViewId, label: 'Settings' },
           ].map((view) => (
             <NavButton
               key={view.id}
@@ -429,39 +429,46 @@ export function Sidebar({
                 viewBox="0 0 16 16"
                 fill="none"
                 stroke="currentColor"
-                strokeWidth="1.4"
+                strokeWidth="1.5"
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 style={{ flexShrink: 0, opacity: localView === view.id ? 1 : 0.7 }}
               >
                 {view.id === 'workspace' && (
                   <>
-                    <rect x="1" y="2" width="14" height="9" rx="1.5" />
-                    <path d="M4 14h8" />
-                    <path d="M8 11v3" />
+                    <rect x="2" y="3" width="12" height="8" rx="1.5" />
+                    <line x1="5" y1="14" x2="11" y2="14" />
+                    <line x1="8" y1="12" x2="8" y2="14" />
                   </>
                 )}
                 {view.id === 'projects' && (
-                  <path d="M1 4a1 1 0 011-1h3.5l1 1H14a1 1 0 011 1v7a1 1 0 01-1 1H2a1 1 0 01-1-1V4z" />
+                  <path d="M2 4a1 1 0 011-1h3l1 1h6a1 1 0 011 1v7a1 1 0 01-1 1H3a1 1 0 01-1-1V4z" />
                 )}
                 {view.id === 'ide' && (
                   <>
-                    <path d="M13.5 2.5l-9 9-3.5 1 1-3.5 9-9a1.06 1.06 0 011.5 1.5z" />
-                    <path d="M10.5 5.5l2 2" />
+                    <path d="M14 3L3 14l-1 4 4-1 11-11z" />
+                    <line x1="10" y1="7" x2="7" y2="10" />
                   </>
                 )}
                 {view.id === 'collaboration' && (
                   <>
-                    <circle cx="6" cy="5" r="2.5" />
-                    <circle cx="10" cy="5" r="2" />
-                    <path d="M1 13c0-2.5 2-4.5 5-4.5s5 2 5 4.5" />
-                    <path d="M11 9c2.5 0 4 1.5 4 4" />
+                    <circle cx="5.5" cy="4.5" r="2" />
+                    <circle cx="10.5" cy="4.5" r="1.8" />
+                    <path d="M1.5 13c0-2 1.5-3.5 4-3.5s4 1.5 4 3.5" />
+                    <path d="M9.5 8.5c2 0 3.5 1.5 3.5 3.5" />
                   </>
                 )}
                 {view.id === 'settings' && (
                   <>
                     <circle cx="8" cy="8" r="2.5" />
-                    <path d="M13.5 8a5.5 5.5 0 01-.2 1.4l1.2.8-1 1.7-1.5-.6a5.5 5.5 0 01-1.2.7l-.2 1.4v1.8h-2l-.2-1.4a5.5 5.5 0 01-1.2-.7l-1.5.6-1-1.7 1.2-.8a5.5 5.5 0 01-.2-1.4 5.5 5.5 0 01.2-1.4l-1.2-.8 1-1.7 1.5.6a5.5 5.5 0 011.2-.7l.2-1.4V2h2l.2 1.4a5.5 5.5 0 011.2.7l1.5-.6 1 1.7-1.2.8c.1.5.2.9.2 1.4z" />
+                    <line x1="8" y1="1.5" x2="8" y2="3.5" />
+                    <line x1="8" y1="12.5" x2="8" y2="14.5" />
+                    <line x1="1.5" y1="8" x2="3.5" y2="8" />
+                    <line x1="12.5" y1="8" x2="14.5" y2="8" />
+                    <line x1="6" y1="6" x2="5" y2="5" />
+                    <line x1="10" y1="10" x2="11" y2="11" />
+                    <line x1="6" y1="10" x2="5" y2="11" />
+                    <line x1="10" y1="6" x2="11" y2="5" />
                   </>
                 )}
               </svg>
