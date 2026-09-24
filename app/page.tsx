@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Sidebar } from '@/components/shell/Sidebar';
 import { TerminalPool } from '@/components/terminal/TerminalPool';
 import { useTerminals } from '@/hooks/useTerminals';
@@ -13,22 +12,106 @@ import { IDEView } from '@/views/ide/IDEView';
 import { useWorkspaces } from '@/hooks/useWorkspaces';
 import { SettingsProvider } from '@/contexts/SettingsContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
+import { WizardView } from '@/components/workspace/WizardView';
+import { terminalCreate } from '@/lib/terminal';
 
 type MainView = 'projects' | 'workspace' | 'grid' | 'ide' | 'collaboration' | 'settings';
 
 function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mainView, setMainView] = useState<MainView>('workspace');
+  const [showWizard, setShowWizard] = useState(false);
 
-  const { workspaces, activeId, create: createWs, selectFolder, activate: activateWs } = useWorkspaces();
-  const { sessions, create: createTerminal, close: closeTerminal, defaultShell } = useTerminals();
+  const {
+    workspaces,
+    activeId,
+    create: createWs,
+    update: updateWs,
+    getLaunchCwd,
+    activate: activateWs,
+    load: loadWorkspaces,
+  } = useWorkspaces();
+  const { sessions, create: createTerminal, close: closeTerminal, list: listTerminals } = useTerminals();
 
-  // Create initial terminal once on first render
-  useEffect(() => {
-    if (sessions.length === 0) {
-      createTerminal(defaultShell).catch(console.error);
+  // Get the active workspace object
+  const activeWorkspace = activeId ? workspaces.find(w => w.id === activeId) : null;
+
+  // ── Terminal creation for the active workspace ─────────────────────────────
+  // Creates a terminal bound to the workspace's project path + id.
+  const createTerminalForWorkspace = useCallback(async (): Promise<string | null> => {
+    const cwd = activeWorkspace?.path || undefined;
+    const wsId = activeWorkspace?.id || undefined;
+    const id = await terminalCreate({ cwd, workspaceId: wsId });
+    if (id) {
+      await listTerminals();
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    return id;
+  }, [activeWorkspace?.path, activeWorkspace?.id, listTerminals]);
+
+  // ── App open: hydrate state, handle launch-cwd, auto-create default ────────
+  // NOTE: `loadWorkspaces()` returns the fresh list — do NOT read `workspaces`
+  // from the closure here; it is stale at mount time.
+  const didInitRef = useRef(false);
+  useEffect(() => {
+    if (didInitRef.current) return;
+    didInitRef.current = true;
+
+    const init = async () => {
+      const wsList = await loadWorkspaces();
+
+      // Check if we were launched from the CLI (scripts/dwo wrote launch-cwd)
+      const launchCwd = await getLaunchCwd();
+
+      if (launchCwd) {
+        // Find a workspace without a path and fill it in
+        const pathlessWs = wsList.find(w => !w.path);
+        if (pathlessWs) {
+          await updateWs(pathlessWs.id, { path: launchCwd });
+        } else if (wsList.length === 0) {
+          // No workspaces at all — create one bound to the launch dir
+          const name = launchCwd.split('/').filter(Boolean).pop() || 'Workspace';
+          await createWs(name, launchCwd);
+        }
+      } else if (wsList.length === 0) {
+        // No launch-cwd and no workspaces — create a default
+        await createWs('Workspace');
+      }
+    };
+    init().catch(console.error);
+  }, [loadWorkspaces, updateWs, createWs, getLaunchCwd]);
+
+  // ── Ensure at least one terminal exists when a workspace is active ─────────
+  // Created immediately — no delay, no stale-closure issues.
+  const createdForRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!activeId || !activeWorkspace?.path) return;
+    if (createdForRef.current.has(activeId)) return;
+    createdForRef.current.add(activeId);
+    (async () => {
+      const current = await listTerminals();
+      const bound = current.some(s => s.workspace_id === activeId);
+      if (!bound) {
+        const cwd = activeWorkspace.path ?? undefined;
+        const wsId = activeWorkspace.id;
+        const id = await terminalCreate({ cwd, workspaceId: wsId });
+        if (id) {
+          await listTerminals();
+        }
+      }
+    })().catch(console.error);
+  }, [activeId, activeWorkspace?.path, activeWorkspace?.id, listTerminals]);
+
+  // Cmd+T → open wizard
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 't') {
+        e.preventDefault();
+        setShowWizard(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   return (
     <div style={{
@@ -43,6 +126,12 @@ function AppShell() {
     }}>
       {/* Phase 5: Diagnostics/Error Reporting */}
       <ErrorReporter />
+
+      {/* New Workspace Wizard (Cmd+T) */}
+      {showWizard && (
+        <WizardView onClose={() => setShowWizard(false)} />
+      )}
+
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
         {/* Left sidebar */}
         {sidebarOpen && (
@@ -52,7 +141,8 @@ function AppShell() {
             setSidebarOpen={setSidebarOpen}
             setMainView={(v: string) => setMainView(v as MainView)}
             currentView={mainView}
-            onCreateTerminal={() => createTerminal(defaultShell)}
+            onCreateTerminal={createTerminalForWorkspace}
+            onOpenWizard={() => setShowWizard(true)}
           />
         )}
 
@@ -118,13 +208,20 @@ function AppShell() {
             flex: 1,
             overflow: 'hidden',
           }}>
-            <TerminalPool onCreateTerminal={() => createTerminal(defaultShell)} />
+            <TerminalPool
+              sessions={sessions}
+              layoutKey={activeId ? `dwo-layout-${activeId}` : undefined}
+              onCreateTerminal={createTerminalForWorkspace}
+              onCloseSession={(id) => closeTerminal(id)}
+              autoLaunchCommand={activeWorkspace?.command}
+              autoLaunchEnabled={true}
+            />
           </div>
 
           {/* Phase 7: IDE View */}
           {mainView === 'ide' && (
             <IDEView
-              activeWorkspace={activeId ? workspaces.find(w => w.id === activeId) : undefined}
+              activeWorkspace={activeWorkspace || undefined}
             />
           )}
         </main>

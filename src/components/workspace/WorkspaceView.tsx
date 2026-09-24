@@ -12,6 +12,7 @@
 import { useMemo } from 'react';
 import { TerminalPool } from '@/components/terminal/TerminalPool';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useTerminals } from '@/hooks/useTerminals';
 
 export interface WorkspaceViewProps {
   /** Workspace display name (e.g. "Open Code", "Cloud Code") */
@@ -40,6 +41,7 @@ export function WorkspaceView({
   accent = '#4a9eff',
 }: WorkspaceViewProps) {
   const { theme } = useTheme();
+  const { sessions, close } = useTerminals();
 
   const headerStyle = useMemo(
     () => ({
@@ -112,7 +114,11 @@ export function WorkspaceView({
 
       {/* ── Terminal pool ──────────────────────────────────────────────── */}
       <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-        <TerminalPool layoutKey={layoutKey} />
+        <TerminalPool
+          sessions={sessions}
+          layoutKey={layoutKey}
+          onCloseSession={(id) => close(id)}
+        />
       </div>
     </div>
   );

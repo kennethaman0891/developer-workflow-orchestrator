@@ -1,51 +1,51 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-
-export interface Workspace {
-  id: string;
-  name: string;
-  path: string | null;
-  panes: string[];
-  created_at: string;
-  updated_at: string;
-}
+import { type Workspace } from '@/lib/workspace';
 
 export function useWorkspaces() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const mountedRef = useRef(false);
 
-  const load = useCallback(async () => {
+  /** Load workspaces from Rust state. Stable identity — does NOT depend on activeId. */
+  const load = useCallback(async (): Promise<Workspace[]> => {
     try {
-      // list_workspaces returns Vec<AppState>, extract workspaces
-      const result = await invoke<Array<{ workspaces: Workspace[]; active_workspace_id: string | null }>>('list_workspaces');
-      if (result.length > 0 && result[0].workspaces) {
-        setWorkspaces(result[0].workspaces);
-        // Restore the persisted active workspace, or default to first
-        const savedId = result[0].active_workspace_id;
-        if (savedId && result[0].workspaces.some(w => w.id === savedId)) {
-          setActiveId(savedId);
-        } else if (!activeId && result[0].workspaces.length > 0) {
-          setActiveId(result[0].workspaces[0].id);
-        }
+      const result = await invoke<Workspace[]>('list_workspaces');
+      setWorkspaces(result);
+      const state = await invoke<{ active_workspace_id: string | null }>('get_workspace_state');
+      if (state.active_workspace_id && result.some(w => w.id === state.active_workspace_id)) {
+        setActiveId((prev) => prev ?? state.active_workspace_id);
+      } else if (result.length > 0) {
+        setActiveId((prev) => prev ?? result[0].id);
       }
       return result;
     } catch (error) {
       console.error('Failed to load workspaces:', error);
       return [];
     }
-  }, [activeId]);
+  }, []);
 
-  const create = useCallback(async (name: string, path?: string) => {
+  /** Create a new workspace with full fields */
+  const create = useCallback(async (
+    name: string,
+    path?: string | null,
+    template?: number | null,
+    command?: string | null,
+    color?: string | null,
+  ): Promise<Workspace> => {
     try {
-      const result = await invoke<Array<{ workspaces: Workspace[] }>>('create_workspace', {
+      const result = await invoke<Workspace[]>('create_workspace', {
         name,
         path: path || null,
+        template: template ?? null,
+        command: command || null,
+        color: color || null,
       });
-      if (result.length > 0 && result[0].workspaces.length > 0) {
-        const newWs = result[0].workspaces[result[0].workspaces.length - 1];
-        setWorkspaces(result[0].workspaces);
+      if (result.length > 0) {
+        const newWs = result[result.length - 1];
+        setWorkspaces(result);
         setActiveId(newWs.id);
         return newWs;
       }
@@ -56,18 +56,41 @@ export function useWorkspaces() {
     }
   }, []);
 
-  /**
-   * Opens the system folder picker dialog and returns the selected path.
-   * Returns null if the user cancels.
-   */
+  /** Update a workspace's fields */
+  const update = useCallback(async (
+    id: string,
+    fields: { path?: string | null; command?: string | null; template?: number | null; color?: string | null },
+  ): Promise<void> => {
+    try {
+      const result = await invoke<Workspace[]>('update_workspace', {
+        id,
+        path: fields.path !== undefined ? fields.path : null,
+        command: fields.command !== undefined ? fields.command : null,
+        template: fields.template !== undefined ? fields.template : null,
+        color: fields.color !== undefined ? fields.color : null,
+      });
+      setWorkspaces(result);
+    } catch (error) {
+      console.error('Failed to update workspace:', error);
+    }
+  }, []);
+
+  /** Opens the system folder picker dialog and returns the selected path */
   const selectFolder = useCallback(async (): Promise<string | null> => {
-    console.log('[useWorkspaces] selectFolder called, invoking select_workspace_folder...');
     try {
       const result = await invoke<string | null>('select_workspace_folder');
-      console.log('[useWorkspaces] select_workspace_folder returned:', result);
       return result;
     } catch (error) {
       console.error('[useWorkspaces] Failed to open folder picker:', error);
+      return null;
+    }
+  }, []);
+
+  /** Get the launch working directory from the CLI wrapper */
+  const getLaunchCwd = useCallback(async (): Promise<string | null> => {
+    try {
+      return await invoke<string | null>('get_launch_cwd');
+    } catch (error) {
       return null;
     }
   }, []);
@@ -83,7 +106,7 @@ export function useWorkspaces() {
 
   const rename = useCallback(async (id: string, newName: string) => {
     try {
-      await invoke('rename_workspace', { id, new_name: newName });
+      await invoke('rename_workspace', { id, newName: newName });
       await load();
     } catch (error) {
       console.error('Failed to rename workspace:', error);
@@ -92,20 +115,18 @@ export function useWorkspaces() {
 
   const activate = useCallback(async (id: string) => {
     try {
-      const result = await invoke<Array<{ workspaces: Workspace[]; active_workspace_id: string | null }>>('activate_workspace', { id });
-      if (result.length > 0 && result[0].workspaces) {
-        setWorkspaces(result[0].workspaces);
-        if (result[0].active_workspace_id) {
-          setActiveId(result[0].active_workspace_id);
-        }
-      }
+      await invoke('activate_workspace', { id });
+      setActiveId(id);
+      await load();
     } catch (error) {
       console.error('Failed to activate workspace:', error);
     }
-  }, []);
+  }, [load]);
 
-  // Load on mount
+  // Load once on mount only — never re-run on activeId change
   useEffect(() => {
+    if (mountedRef.current) return;
+    mountedRef.current = true;
     load().catch(console.error);
   }, [load]);
 
@@ -114,7 +135,9 @@ export function useWorkspaces() {
     activeId,
     setActiveId,
     create,
+    update,
     selectFolder,
+    getLaunchCwd,
     close,
     rename,
     activate,

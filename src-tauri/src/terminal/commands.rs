@@ -2,26 +2,30 @@
 //!
 //! Tauri command handlers for terminal operations.
 
-use std::path::PathBuf;
 use super::manager::TerminalManager;
 
 /// Create a new terminal session
+///
+/// `cwd`: project directory to open in (validated, falls back to HOME)
+/// `workspace_id`: optional workspace this terminal belongs to
+/// `columns` / `rows`: initial terminal dimensions (default 80×24)
 #[tauri::command]
 pub async fn terminal_create(
     state: tauri::State<'_, TerminalManager>,
-    cmd: String,
     cwd: Option<String>,
+    workspace_id: Option<String>,
     columns: Option<u16>,
     rows: Option<u16>,
 ) -> Result<String, String> {
-    let cwd_path = cwd.map(PathBuf::from).unwrap_or_else(|| {
-        std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"))
-    });
-
     let cols = columns.unwrap_or(80);
     let rows = rows.unwrap_or(24);
 
-    state.create(&cmd, &cwd_path, cols, rows)
+    state.create(
+        cwd.as_deref(),
+        workspace_id.as_deref(),
+        cols,
+        rows,
+    )
 }
 
 /// Attach to a terminal session (start receiving output)
@@ -42,7 +46,7 @@ pub async fn terminal_detach(
     state.detach(&id)
 }
 
-/// Write data to a terminal session
+/// Write raw data to a terminal session
 #[tauri::command]
 pub async fn terminal_write(
     state: tauri::State<'_, TerminalManager>,
@@ -50,6 +54,17 @@ pub async fn terminal_write(
     data: String,
 ) -> Result<(), String> {
     state.write(&id, data.as_bytes())
+}
+
+/// Send a command string + newline to a session's PTY stdin.
+/// The command is sent as-is followed by \r so the shell executes it.
+#[tauri::command]
+pub async fn terminal_send_command(
+    state: tauri::State<'_, TerminalManager>,
+    id: String,
+    command: String,
+) -> Result<(), String> {
+    state.send_command(&id, &command)
 }
 
 /// Resize a terminal session

@@ -1,47 +1,51 @@
 //! Tauri command handlers for Git operations
 
-use crate::git::GitManager;
-use tauri::State;
+use crate::git::git::{GitManager, GitResult, GitStatus};
 
-/// Get git status
+/// Get git status for a given project path
 #[tauri::command]
 pub async fn git_status(
-    state: State<'_, GitManager>
-) -> Result<crate::git::GitStatus, String> {
-    state.status().await
+    project_path: String,
+) -> Result<GitStatus, String> {
+    let manager = GitManager::new(std::path::PathBuf::from(&project_path));
+    manager.status().await
 }
 
 /// Stage a file
 #[tauri::command]
 pub async fn git_stage(
+    project_path: String,
     file: String,
-    state: State<'_, GitManager>
-) -> Result<crate::git::GitResult, String> {
-    state.stage(&file).await
+) -> Result<GitResult, String> {
+    let manager = GitManager::new(std::path::PathBuf::from(&project_path));
+    manager.stage(&file).await
 }
 
 /// Commit changes
 #[tauri::command]
 pub async fn git_commit(
+    project_path: String,
     message: String,
-    state: State<'_, GitManager>
-) -> Result<crate::git::GitResult, String> {
-    state.commit(&message).await
+) -> Result<GitResult, String> {
+    let manager = GitManager::new(std::path::PathBuf::from(&project_path));
+    manager.commit(&message).await
 }
 
 /// Get git log
 #[tauri::command]
 pub async fn git_log(
+    project_path: String,
     limit: usize,
-    state: State<'_, GitManager>
 ) -> Result<Vec<String>, String> {
-    state.log(limit).await
+    let manager = GitManager::new(std::path::PathBuf::from(&project_path));
+    manager.log(limit).await
 }
 
 /// Get current branch
 #[tauri::command]
 pub async fn git_branch(
-    state: State<'_, GitManager>
+    project_path: String,
 ) -> Result<String, String> {
-    state.branch().await
+    let manager = GitManager::new(std::path::PathBuf::from(&project_path));
+    manager.branch().await
 }

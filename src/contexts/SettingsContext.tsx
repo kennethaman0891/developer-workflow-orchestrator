@@ -9,6 +9,8 @@ export interface AppSettings {
   minimap: boolean;
   transparency: number; // 0 = opaque, 100 = fully transparent
   defaultShell: string;
+  /** Allow workspaces to auto-launch CLI commands in terminal panes */
+  autoExecEnabled: boolean;
 }
 
 const STORAGE_KEY = 'dwo-app-settings';
@@ -20,6 +22,7 @@ const DEFAULTS: AppSettings = {
   minimap: true,
   transparency: 0,
   defaultShell: '/bin/zsh',
+  autoExecEnabled: true,
 };
 
 function loadSettings(): AppSettings {
@@ -46,6 +49,7 @@ interface SettingsValue extends AppSettings {
   setMinimap: (show: boolean) => void;
   setTransparency: (val: number) => void;
   setShell: (shell: string) => void;
+  setAutoExecEnabled: (enabled: boolean) => void;
 }
 
 const SettingsContext = createContext<SettingsValue | null>(null);
@@ -65,12 +69,13 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const setTheme = (key: string) => update({ theme: key });
   const setFontSize = (fontSize: number) => update({ fontSize });
   const setWordWrap = (wordWrap: boolean) => update({ wordWrap });
-  const setMinimap = (minimap: boolean) => update({ minimap });
+  const setMinimap = (show: boolean) => update({ minimap: show });
   const setTransparency = (transparency: number) => update({ transparency });
   const setShell = (defaultShell: string) => update({ defaultShell });
+  const setAutoExecEnabled = (enabled: boolean) => update({ autoExecEnabled: enabled });
 
   return (
-    <SettingsContext.Provider value={{ ...settings, setTheme, setFontSize, setWordWrap, setMinimap, setTransparency, setShell }}>
+    <SettingsContext.Provider value={{ ...settings, setTheme, setFontSize, setWordWrap, setMinimap, setTransparency, setShell, setAutoExecEnabled }}>
       {children}
     </SettingsContext.Provider>
   );

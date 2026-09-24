@@ -16,19 +16,25 @@ export interface SessionMeta {
   focus: boolean;
   visible: boolean;
   is_tui: boolean;
+  workspace_id: string | null;
 }
 
 export interface TerminalCreateOptions {
-  cmd: string;
+  /** Project directory to open in (validated, falls back to HOME) */
   cwd?: string;
+  /** Workspace this terminal belongs to */
+  workspaceId?: string;
+  /** Initial terminal columns (default 80) */
   columns?: number;
+  /** Initial terminal rows (default 24) */
   rows?: number;
 }
 
+/** Create a new terminal session */
 export async function terminalCreate(options: TerminalCreateOptions): Promise<string> {
   return invoke<string>('terminal_create', {
-    cmd: options.cmd,
     cwd: options.cwd,
+    workspaceId: options.workspaceId,
     columns: options.columns,
     rows: options.rows,
   });
@@ -44,6 +50,11 @@ export async function terminalDetach(id: string): Promise<void> {
 
 export async function terminalWrite(id: string, data: string): Promise<void> {
   await invoke('terminal_write', { id, data });
+}
+
+/** Send a command string + newline to a session's PTY stdin */
+export async function terminalSendCommand(id: string, command: string): Promise<void> {
+  await invoke('terminal_send_command', { id, command });
 }
 
 export async function terminalResize(id: string, cols: number, rows: number): Promise<void> {

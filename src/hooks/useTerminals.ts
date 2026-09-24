@@ -3,19 +3,9 @@
 import { useState, useCallback, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { getDefaultShell } from '@/lib/shell';
+import type { SessionMeta } from '@/lib/terminal';
 
-export interface SessionMeta {
-  id: string;
-  title: string;
-  cwd: string;
-  columns: number;
-  rows: number;
-  created_at: string;
-  last_activity: string;
-  focus: boolean;
-  visible: boolean;
-  is_tui: boolean;
-}
+export type { SessionMeta };
 
 export function useTerminals() {
   const [sessions, setSessions] = useState<SessionMeta[]>([]);
@@ -33,13 +23,19 @@ export function useTerminals() {
     }
   }, []);
 
-  const create = useCallback(async (cmd: string, cwd?: string, cols?: number, rows?: number) => {
+  /** Create a new terminal session */
+  const create = useCallback(async (
+    cwd?: string,
+    workspaceId?: string,
+    cols?: number,
+    rows?: number,
+  ) => {
     try {
       const id = await invoke<string>('terminal_create', {
-        cmd,
-        cwd,
+        cwd: cwd || null,
+        workspaceId: workspaceId || null,
         columns: cols,
-        rows: rows
+        rows: rows,
       });
       await list();
       if (!activeId) {
@@ -84,9 +80,17 @@ export function useTerminals() {
     }
   }, []);
 
+  /** Send a command string + newline to a session's PTY stdin */
+  const sendCommand = useCallback(async (id: string, command: string) => {
+    try {
+      await invoke('terminal_send_command', { id, command });
+    } catch (error) {
+      console.error('Failed to send command to terminal:', error);
+    }
+  }, []);
+
   const setShell = useCallback((shell: string) => {
     setDefaultShell(shell);
-    // Persist to localStorage for persistence across sessions
     try {
       localStorage.setItem('dwo-default-shell', shell);
     } catch {}
@@ -95,7 +99,6 @@ export function useTerminals() {
   // Load on mount
   useEffect(() => {
     list().catch(console.error);
-    // Restore saved shell preference
     try {
       const saved = localStorage.getItem('dwo-default-shell');
       if (saved) {
@@ -112,6 +115,7 @@ export function useTerminals() {
     resize,
     select,
     write,
+    sendCommand,
     list,
     defaultShell,
     setShell,

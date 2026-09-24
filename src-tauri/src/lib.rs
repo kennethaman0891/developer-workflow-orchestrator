@@ -15,6 +15,7 @@ pub mod git;
 pub mod tasks;
 pub mod plugins;
 pub mod diagnostics;
+pub mod workspace;
 
 use std::path::PathBuf;
 use std::fs::File;
@@ -41,9 +42,13 @@ pub fn run() {
             let terminal_manager = terminal::TerminalManager::new(app.handle().clone());
             app.manage(terminal_manager);
 
-            // Initialize state manager
-            let state = state::state::AppState::load().unwrap_or_default();
+            // Initialize state manager (managed as Mutex so commands can mutate it)
+            let state = std::sync::Mutex::new(state::state::AppState::load().unwrap_or_default());
             app.manage(state);
+
+            // Initialize workspace index (workspace ↔ session persistence)
+            let workspace_index = workspace::WorkspaceIndex::new();
+            app.manage(workspace_index);
 
             // Initialize license manager
             let license_manager = license::license::LicenseManager::new();
@@ -53,9 +58,7 @@ pub fn run() {
             let agent_manager = agents::AgentManager::new();
             app.manage(agent_manager);
 
-            // Initialize git manager (Phase 8)
-            let git_manager = git::GitManager::new(data_dir.clone());
-            app.manage(git_manager);
+            // Git manager is created per-call in commands (no shared state needed)
 
             // Initialize task manager (Phase 9)
             let task_manager = tasks::TaskManager::new();
@@ -68,11 +71,12 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            // Terminal commands (Phase 1)
+            // Terminal commands
             terminal::commands::terminal_create,
             terminal::commands::terminal_attach,
             terminal::commands::terminal_detach,
             terminal::commands::terminal_write,
+            terminal::commands::terminal_send_command,
             terminal::commands::terminal_resize,
             terminal::commands::terminal_close,
             terminal::commands::terminal_list,
@@ -82,7 +86,7 @@ pub fn run() {
             terminal::commands::terminal_set_focus,
             terminal::commands::terminal_set_visible,
             terminal::commands::terminal_drop_files,
-            // File system commands (Phase 2)
+            // File system commands
             fs::commands::list_dir,
             fs::commands::read_file,
             fs::commands::write_file,
@@ -91,20 +95,30 @@ pub fn run() {
             fs::commands::rename,
             fs::commands::delete,
             fs::commands::search,
-            // Workspace commands (Phase 2)
+            // Workspace commands
             state::commands::create_workspace,
             state::commands::rename_workspace,
             state::commands::close_workspace,
             state::commands::load_workspace_state,
             state::commands::save_workspace_state,
             state::commands::list_workspaces,
+            state::commands::get_workspace_state,
             state::commands::activate_workspace,
             state::commands::select_workspace_folder,
-            // License commands (Phase 3)
+            state::commands::update_workspace,
+            state::commands::get_launch_cwd,
+            // Workspace index commands
+            workspace::commands::workspace_index_set,
+            workspace::commands::workspace_index_set_pane,
+            workspace::commands::workspace_index_get,
+            workspace::commands::workspace_index_get_pane,
+            workspace::commands::workspace_index_remove_session,
+            workspace::commands::workspace_index_clear,
+            // License commands
             license::commands::activate,
             license::commands::status,
             license::commands::deactivate,
-            // Agent commands (Phase 4)
+            // Agent commands
             agents::commands::agent_list_tasks,
             agents::commands::agent_get_task,
             agents::commands::agent_create_task,
@@ -112,13 +126,13 @@ pub fn run() {
             agents::commands::agent_list_configs,
             agents::commands::agent_add_config,
             agents::commands::agent_remove_config,
-            // Git commands (Phase 8)
+            // Git commands
             git::commands::git_status,
             git::commands::git_stage,
             git::commands::git_commit,
             git::commands::git_log,
             git::commands::git_branch,
-            // Task commands (Phase 9)
+            // Task commands
             tasks::commands::task_list,
             tasks::commands::task_get,
             tasks::commands::task_create,
@@ -126,14 +140,14 @@ pub fn run() {
             tasks::commands::task_delete,
             tasks::commands::task_save_result,
             tasks::commands::task_get_results,
-            // Plugin commands (Phase 11)
+            // Plugin commands
             plugins::commands::plugin_list,
             plugins::commands::plugin_get,
             plugins::commands::plugin_install,
             plugins::commands::plugin_remove,
             plugins::commands::plugin_toggle,
             plugins::commands::plugin_enabled,
-            // Diagnostics commands (Phase 5)
+            // Diagnostics commands
             diagnostics::commands::frontend_error,
         ])
         .run(tauri::generate_context!())
@@ -141,11 +155,7 @@ pub fn run() {
     eprintln!("[DWO] App run completed");
 }
 
-/// Set up a non-aborting panic hook that logs to ~/.local/share/dwo/rust-panics.log
-///
-/// Also installs an NSException (uncaught Obj-C exception) logger so foreign
-/// exceptions show up in the same file — this is what made the macOS 26 launch
-/// crash (tauri-apps/tao#1171) so hard to diagnose.
+/// Set up a non-aborting panic hook that logs to ~/.config/dwo/rust-panics.log
 fn setup_panic_hook() {
     panic::set_hook(Box::new(|info| {
         eprintln!("[DWO PANIC HOOK] Panic detected!");
@@ -174,9 +184,6 @@ fn setup_panic_hook() {
 
             let _ = writeln!(file, "[{}] Panic at {}: {}", timestamp, location, payload);
 
-            // A panic unwinding across an `extern "C"` boundary means a
-            // foreign (Obj-C) exception or a callback that cannot unwind —
-            // log a native backtrace so the origin is diagnosable.
             if payload.contains("cannot unwind") {
                 let _ = writeln!(file, "[{}] Backtrace:", timestamp);
                 let _ = writeln!(file, "{}", std::backtrace::Backtrace::force_capture());
@@ -185,7 +192,6 @@ fn setup_panic_hook() {
     }));
 
     // Log uncaught NSExceptions (foreign Obj-C exceptions) to the same file.
-    // macOS only; the handler is process-global and set once at startup.
     #[cfg(target_os = "macos")]
     unsafe {
         use objc2::runtime::AnyObject;
@@ -209,28 +215,27 @@ fn setup_panic_hook() {
                 let text = if exception.is_null() {
                     "<null exception>".to_string()
                 } else {
-                    // -description returns an NSString formatted "Name: reason".
-                    let desc: Option<objc2::rc::Retained<objc2::runtime::NSObject>> =
-                        unsafe { objc2::msg_send![exception.as_ref().unwrap(), description] };
-                    desc.and_then(|d| {
-                        // -UTF8String gives a C string; copy it before logging.
-                        let ptr: *const std::ffi::c_char =
-                            unsafe { objc2::msg_send![&d, UTF8String] };
-                        if ptr.is_null() {
-                            None
-                        } else {
-                            Some(unsafe { std::ffi::CStr::from_ptr(ptr) }.to_string_lossy().to_string())
-                        }
-                    })
-                    .unwrap_or_else(|| "<exception>".to_string())
+                    unsafe {
+                        use objc2::msg_send;
+                        let desc: Option<objc2::rc::Retained<objc2::runtime::NSObject>> =
+                            msg_send![exception.as_ref().unwrap(), description];
+                        desc.and_then(|d| {
+                            let ptr: *const std::ffi::c_char =
+                                msg_send![&d, UTF8String];
+                            if ptr.is_null() {
+                                None
+                            } else {
+                                Some(std::ffi::CStr::from_ptr(ptr).to_string_lossy().to_string())
+                            }
+                        })
+                        .unwrap_or_else(|| "<exception>".to_string())
+                    }
                 };
                 let _ = writeln!(file, "[{}] NSException: {}", timestamp, text);
             }
         }
 
-        // NSSetUncaughtExceptionHandler comes from Foundation, which is
-        // always loaded in a Tauri process.
-        unsafe extern "C" {
+        extern "C" {
             fn NSSetUncaughtExceptionHandler(
                 handler: Option<extern "C" fn(*const AnyObject)>,
             );
@@ -245,7 +250,6 @@ mod tests {
 
     #[test]
     fn test_panic_hook_setup() {
-        // This test just verifies the function exists and can be called
         assert!(true);
     }
 }

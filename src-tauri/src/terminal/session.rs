@@ -14,7 +14,7 @@ use chrono::{DateTime, Utc};
 pub struct SessionMeta {
     /// Unique session identifier
     pub id: String,
-    /// User-visible title
+    /// User-visible title (typically the shell path)
     pub title: String,
     /// Working directory
     pub cwd: PathBuf,
@@ -32,6 +32,9 @@ pub struct SessionMeta {
     pub visible: bool,
     /// Whether this is a TUI application
     pub is_tui: bool,
+    /// Workspace this session belongs to (set after creation)
+    #[serde(default)]
+    pub workspace_id: Option<String>,
 }
 
 impl SessionMeta {
@@ -49,6 +52,7 @@ impl SessionMeta {
             focus: false,
             visible: true,
             is_tui: false,
+            workspace_id: None,
         }
     }
 
@@ -64,6 +68,8 @@ pub struct TerminalSession {
     pub meta: SessionMeta,
     /// Output sender for streaming to frontend
     pub output_tx: mpsc::UnboundedSender<Vec<u8>>,
+    /// Output receiver — taken once during initialization by spawn_shell
+    pub output_rx: Option<mpsc::UnboundedReceiver<Vec<u8>>>,
     /// Scrollback buffer (last N lines)
     pub scrollback: Arc<Mutex<Vec<String>>>,
     /// Optional PTY master handle (kept for resize operations)
@@ -81,18 +87,24 @@ pub struct TerminalSession {
 }
 
 impl TerminalSession {
-    /// Create a new terminal session
-    pub fn new(meta: SessionMeta) -> (Self, mpsc::UnboundedReceiver<Vec<u8>>) {
+    /// Create a new terminal session (legacy — unused, prefer new_with_meta)
+    #[allow(dead_code)]
+    pub fn new(_meta: SessionMeta) -> (Self, mpsc::UnboundedReceiver<Vec<u8>>) {
+        panic!("Legacy TerminalSession::new is deprecated — use new_with_meta + spawn_shell")
+    }
+
+    /// Create a new terminal session with output_rx available for spawn_shell
+    pub fn new_with_meta(meta: SessionMeta) -> Self {
         let (output_tx, output_rx) = mpsc::unbounded_channel();
-        let session = Self {
+        Self {
             meta,
             output_tx,
+            output_rx: Some(output_rx),
             scrollback: Arc::new(Mutex::new(Vec::new())),
             pty_master: None,
             pty_writer: None,
             child: None,
-        };
-        (session, output_rx)
+        }
     }
 
     /// Set the PTY master handle
@@ -121,15 +133,6 @@ impl TerminalSession {
         self.scrollback.lock().clone()
     }
 
-    /// Add output to scrollback (limited to last 1000 lines)
-    pub fn add_to_scrollback(&self, line: String) {
-        let mut sb = self.scrollback.lock();
-        sb.push(line);
-        if sb.len() > 1000 {
-            sb.remove(0);
-        }
-    }
-
     /// Append raw PTY output to the scrollback buffer (line-based, capped).
     pub fn process_output_for_scrollback(&self, data: &[u8]) {
         let text = String::from_utf8_lossy(data);
@@ -146,8 +149,7 @@ impl TerminalSession {
     ///
     /// Uses the persistent writer taken once at spawn time. Never calls
     /// `MasterPty::take_writer()` again — portable-pty forbids taking the
-    /// writer more than once per PTY, and doing so silently broke every
-    /// keystroke after the first.
+    /// writer more than once per PTY.
     pub fn write_input(&self, data: &[u8]) -> Result<(), String> {
         let writer = self
             .pty_writer
@@ -159,16 +161,34 @@ impl TerminalSession {
         Ok(())
     }
 
+    /// Send a command string + newline to the PTY stdin.
+    /// This is the high-level API used by terminal_send_command.
+    pub fn send_command(&self, command: &str) -> Result<(), String> {
+        let payload = format!("{}\r", command);
+        self.write_input(payload.as_bytes())
+    }
+
+    /// Resize the PTY
+    pub fn resize(&mut self, cols: u16, rows: u16) -> Result<(), String> {
+        self.meta.columns = cols;
+        self.meta.rows = rows;
+        if let Some(master) = &self.pty_master {
+            let master = master.lock();
+            let _ = master.resize(portable_pty::PtySize {
+                rows,
+                cols,
+                pixel_width: 0,
+                pixel_height: 0,
+            });
+        }
+        Ok(())
+    }
+
     /// Safely close the session by taking handles to prevent drop-order panics.
     /// This should be called before removing the session from the manager.
     pub fn close_safely(&mut self) {
-        // Take the child handle first to prevent it from being dropped while
-        // still holding FFI resources
         self.child.take();
-        // Take the PTY master handle to prevent cleanup during drop
         self.pty_master.take();
-        // Take the persistent writer handle as well
         self.pty_writer.take();
-        // output_tx will be dropped last (natural drop order), which is safe
     }
 }

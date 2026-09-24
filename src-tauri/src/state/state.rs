@@ -6,6 +6,20 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+/// A single terminal pane slot within a workspace.
+/// `tty` holds the session id once a terminal is spawned; `None` means empty.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PaneSlot {
+    /// Session id of the terminal in this pane, if any.
+    pub tty: Option<String>,
+}
+
+impl PaneSlot {
+    pub fn empty() -> Self {
+        Self { tty: None }
+    }
+}
+
 /// Workspace state persisted to disk
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Workspace {
@@ -13,19 +27,35 @@ pub struct Workspace {
     pub name: String,
     /// Project folder path selected via system file picker (e.g. /Users/me/project)
     pub path: Option<String>,
-    pub panes: Vec<String>,
+    /// Number of terminal panes in the grid layout (1, 2, 4, 6, 8, 10, 12, 14, 16)
+    #[serde(default)]
+    pub template: Option<u8>,
+    /// Accent color for the workspace identity dot / highlight
+    #[serde(default)]
+    pub color: Option<String>,
+    /// CLI command to auto-launch in every pane (e.g. "opencode", "claude", "codex")
+    #[serde(default)]
+    pub command: Option<String>,
+    /// Pane slots — one per terminal in the template grid
+    #[serde(default)]
+    pub panes: Vec<PaneSlot>,
     pub created_at: String,
     pub updated_at: String,
 }
 
 impl Workspace {
-    pub fn new(name: &str, path: Option<&str>) -> Self {
+    pub fn new(name: &str, path: Option<&str>, template: Option<u8>, command: Option<&str>, color: Option<&str>) -> Self {
         let now = chrono::Utc::now().to_rfc3339();
+        let template_count = template.unwrap_or(1) as usize;
+        let panes: Vec<PaneSlot> = (0..template_count).map(|_| PaneSlot::empty()).collect();
         Self {
             id: Uuid::new_v4().to_string(),
             name: name.to_string(),
             path: path.map(|p| p.to_string()),
-            panes: Vec::new(),
+            template,
+            color: color.map(|c| c.to_string()),
+            command: command.map(|c| c.to_string()),
+            panes,
             created_at: now.clone(),
             updated_at: now,
         }
@@ -83,9 +113,16 @@ impl AppState {
         std::fs::write(&path, content).map_err(|e| e.to_string())
     }
 
-    /// Create a new workspace
-    pub fn create_workspace(&mut self, name: &str, path: Option<&str>) -> &Workspace {
-        let ws = Workspace::new(name, path);
+    /// Create a new workspace with all fields
+    pub fn create_workspace(
+        &mut self,
+        name: &str,
+        path: Option<&str>,
+        template: Option<u8>,
+        command: Option<&str>,
+        color: Option<&str>,
+    ) -> &Workspace {
+        let ws = Workspace::new(name, path, template, command, color);
         self.workspaces.push(ws);
         self.active_workspace_id = Some(self.workspaces.last().unwrap().id.clone());
         self.save().ok();
@@ -104,9 +141,50 @@ impl AppState {
         }
     }
 
+    /// Update a workspace field (path, command, template, color)
+    pub fn update_workspace(
+        &mut self,
+        id: &str,
+        path: Option<&str>,
+        command: Option<&str>,
+        template: Option<u8>,
+        color: Option<&str>,
+    ) -> Result<(), String> {
+        if let Some(ws) = self.workspaces.iter_mut().find(|w| w.id == id) {
+            if let Some(p) = path {
+                ws.path = Some(p.to_string());
+            }
+            if command.is_some() {
+                ws.command = command.map(|c| c.to_string());
+            }
+            if let Some(t) = template {
+                ws.template = Some(t);
+                // Resize pane slots to match new template
+                let count = t as usize;
+                while ws.panes.len() < count {
+                    ws.panes.push(PaneSlot::empty());
+                }
+                ws.panes.truncate(count);
+            }
+            if color.is_some() {
+                ws.color = color.map(|c| c.to_string());
+            }
+            ws.updated_at = chrono::Utc::now().to_rfc3339();
+            self.save().map_err(|e| e.to_string())?;
+            Ok(())
+        } else {
+            Err(format!("Workspace not found: {}", id))
+        }
+    }
+
     /// Get a workspace by ID
     pub fn get_workspace(&self, id: &str) -> Option<&Workspace> {
         self.workspaces.iter().find(|w| w.id == id)
+    }
+
+    /// Get mutable workspace by ID
+    pub fn get_workspace_mut(&mut self, id: &str) -> Option<&mut Workspace> {
+        self.workspaces.iter_mut().find(|w| w.id == id)
     }
 
     /// Update workspace name

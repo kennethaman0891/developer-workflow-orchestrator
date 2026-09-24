@@ -10,7 +10,33 @@ use parking_lot::RwLock;
 use tauri::{AppHandle, Emitter};
 
 use super::session::{SessionMeta, TerminalSession};
-use super::pty::spawn_session;
+use super::pty::spawn_shell;
+
+/// Check if a path exists and is a directory
+pub fn path_exists(path: &Path) -> bool {
+    path.exists() && path.is_dir()
+}
+
+/// Get the user's home directory, or "/" as ultimate fallback
+fn home_dir() -> std::path::PathBuf {
+    dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("/"))
+}
+
+/// Validate a cwd path. Returns the validated path, or falls back to HOME.
+pub fn validate_cwd(cwd: Option<&str>) -> std::path::PathBuf {
+    match cwd {
+        Some(path) if !path.is_empty() => {
+            let p = std::path::PathBuf::from(path);
+            if path_exists(&p) {
+                p
+            } else {
+                log::warn!("cwd '{}' does not exist or is not a directory, falling back to HOME", path);
+                home_dir()
+            }
+        }
+        _ => home_dir(),
+    }
+}
 
 /// Manager for all terminal sessions
 pub struct TerminalManager {
@@ -29,22 +55,29 @@ impl TerminalManager {
         }
     }
 
-    /// Create a new terminal session with PTY
+    /// Create a new terminal session with PTY (login shell, cwd-validated)
+    ///
+    /// `workspace_id` is optional — if provided, the session is tagged
+    /// for later association via WorkspaceIndex.
     pub fn create(
         &self,
-        cmd: &str,
-        cwd: &Path,
+        cwd: Option<&str>,
+        workspace_id: Option<&str>,
         columns: u16,
         rows: u16,
     ) -> Result<String, String> {
+        let validated_cwd = validate_cwd(cwd);
+        log::info!("[DWO] terminal_create cwd={:?} workspace_id={:?} validated={}", cwd, workspace_id, validated_cwd.display());
         let id = uuid::Uuid::new_v4().to_string();
 
-        // Spawn the PTY session (session + its output receiver)
-        let (mut session, mut output_rx) = spawn_session(cmd, Some(cwd), columns, rows)?;
+        // Spawn the PTY session (login shell + validated cwd)
+        let (mut session, mut output_rx) = spawn_shell(Some(&validated_cwd), columns, rows)?;
 
-        // Give the session a stable identity so output events can be
-        // correlated with the right terminal on the frontend.
+        // Assign the id and workspace binding
         session.meta.id = id.clone();
+        if let Some(ws_id) = workspace_id {
+            session.meta.workspace_id = Some(ws_id.to_string());
+        }
 
         let session = Arc::new(RwLock::new(session));
 
@@ -55,7 +88,6 @@ impl TerminalManager {
         let reader_id = id.clone();
         tauri::async_runtime::spawn(async move {
             while let Some(chunk) = output_rx.recv().await {
-                // Update scrollback for late joiners / debugging.
                 reader_session.read().process_output_for_scrollback(&chunk);
                 let payload = serde_json::json!({
                     "session_id": reader_id,
@@ -106,26 +138,22 @@ impl TerminalManager {
         }
     }
 
+    /// Send a command string + newline to a session's PTY stdin
+    pub fn send_command(&self, id: &str, command: &str) -> Result<(), String> {
+        let sessions = self.sessions.read();
+        match sessions.get(id) {
+            Some(session) => session.read().send_command(command),
+            None => Err(format!("Session not found: {}", id)),
+        }
+    }
+
     /// Resize a session
     pub fn resize(&self, id: &str, cols: u16, rows: u16) -> Result<(), String> {
         let mut sessions = self.sessions.write();
         match sessions.get_mut(id) {
             Some(session) => {
                 let mut s = session.write();
-                s.meta.columns = cols;
-                s.meta.rows = rows;
-
-                // Also resize the PTY if available
-                if let Some(master) = &s.pty_master {
-                    let master = master.lock();
-                    let _ = master.resize(portable_pty::PtySize {
-                        rows,
-                        cols,
-                        pixel_width: 0,
-                        pixel_height: 0,
-                    });
-                }
-                Ok(())
+                s.resize(cols, rows)
             }
             None => Err(format!("Session not found: {}", id)),
         }
@@ -218,7 +246,6 @@ impl TerminalManager {
         }
         for file in files {
             let escaped = file.replace(' ', "\\ ").replace('"', "\\\"");
-            // Write to PTY if available
             if let Some(session) = sessions.get(id) {
                 let input = format!("{}\x0d", escaped);
                 let _ = session.read().write_input(input.as_bytes());

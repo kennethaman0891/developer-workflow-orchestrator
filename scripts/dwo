@@ -1,0 +1,45 @@
+#!/bin/bash
+# dwo — Developer Workflow Orchestrator CLI wrapper
+#
+# Usage: dwo [path]
+#
+# Writes the current working directory to ~/.config/dwo/launch-cwd
+# so the DWO app can auto-fill projectPath for the workspace.
+# If no path argument is given, uses $PWD.
+
+set -e
+
+# Determine the project directory
+if [ -n "$1" ]; then
+    TARGET_DIR="$(cd "$1" && pwd)"
+else
+    TARGET_DIR="$PWD"
+fi
+
+# Ensure the config directory exists
+DWO_CONFIG_DIR="${HOME}/.config/dwo"
+mkdir -p "$DWO_CONFIG_DIR"
+
+# Write the launch-cwd file
+echo "$TARGET_DIR" > "$DWO_CONFIG_DIR/launch-cwd"
+
+echo "[dwo] Launching DWO in: $TARGET_DIR"
+
+# Find and launch the DWO binary
+# Check common install locations
+DWO_BIN=""
+
+if [ -f "$HOME/Applications/DWO.app/Contents/MacOS/DWO" ]; then
+    DWO_BIN="$HOME/Applications/DWO.app/Contents/MacOS/DWO"
+elif [ -f "/Applications/DWO.app/Contents/MacOS/DWO" ]; then
+    DWO_BIN="/Applications/DWO.app/Contents/MacOS/DWO"
+elif command -v dwo &>/dev/null; then
+    DWO_BIN="dwo"
+fi
+
+if [ -n "$DWO_BIN" ]; then
+    exec "$DWO_BIN" &
+else
+    echo "[dwo] Warning: DWO binary not found. The launch-cwd has been written."
+    echo "[dwo] Start DWO manually and it will pick up: $TARGET_DIR"
+fi

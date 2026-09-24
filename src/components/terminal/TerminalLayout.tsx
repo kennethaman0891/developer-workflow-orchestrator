@@ -13,8 +13,10 @@
 'use client';
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { SessionMeta } from '@/hooks/useTerminals';
+import type { SessionMeta } from '@/hooks/useTerminals';
 import { useTerminalLayout } from '@/hooks/useTerminalLayout';
+import { useAutoLaunch, type PaneDimensions } from '@/hooks/useAutoLaunch';
+import { terminalResize } from '@/lib/terminal';
 import { TerminalPanel } from './TerminalPanel';
 
 enum LayoutMode {
@@ -184,9 +186,21 @@ interface TerminalLayoutProps {
   onCloseSession?: (id: string) => void;
   /** Per-workspace localStorage key so Open Code / Cloud Code keep separate layouts */
   layoutKey?: string;
+  /** CLI command to auto-launch in every pane (from workspace.command) */
+  autoLaunchCommand?: string | null;
+  /** Whether auto-exec permission is enabled */
+  autoLaunchEnabled?: boolean;
 }
 
-export function TerminalLayout({ sessions, defaultShell: _defaultShell, onCreate, onCloseSession, layoutKey }: TerminalLayoutProps) {
+export function TerminalLayout({
+  sessions,
+  defaultShell: _defaultShell,
+  onCreate,
+  onCloseSession,
+  layoutKey,
+  autoLaunchCommand,
+  autoLaunchEnabled,
+}: TerminalLayoutProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const {
     layout,
@@ -207,6 +221,54 @@ export function TerminalLayout({ sessions, defaultShell: _defaultShell, onCreate
 
   // Split-mode divider position
   const [splitPos, setSplitPos] = useState(0.5);
+
+  // ── Auto-launch CLI in all panes ─────────────────────────────────────────
+  const { autoLaunch, preResizePanes, computePtyDimensions } = useAutoLaunch();
+  const launchedKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!autoLaunchCommand || !autoLaunchEnabled || sessions.length === 0) return;
+
+    const launchKey = `${autoLaunchCommand}:${sessions.map((s) => s.id).join(',')}`;
+    if (launchedKeyRef.current === launchKey) return;
+    launchedKeyRef.current = launchKey;
+
+    const run = async () => {
+      // Wait for shells to reach a prompt (scaled delay)
+      const n = sessions.length;
+      const delay = Math.min(1500, 500 + n * 120);
+      await new Promise((r) => setTimeout(r, delay + 200));
+
+      // Compute grid dimensions from the container
+      const container = gridContainerRef.current;
+      let dimensions: PaneDimensions[] = [];
+      if (container) {
+        const rect = container.getBoundingClientRect();
+        const cols = Math.ceil(Math.sqrt(n));
+        const rows = Math.ceil(n / cols);
+        const cellW = rect.width / cols;
+        const cellH = rect.height / rows;
+        for (const s of sessions) {
+          const dims = computePtyDimensions(cellW, cellH);
+          dimensions.push({ sessionId: s.id, cols: dims.cols, rows: dims.rows });
+        }
+      } else {
+        dimensions = sessions.map((s) => ({ sessionId: s.id, cols: 120, rows: 40 }));
+      }
+
+      // Pre-resize PTYs to exact grid cell dimensions
+      await preResizePanes(dimensions);
+
+      // Launch the command (staggered 200ms apart)
+      await autoLaunch({
+        command: autoLaunchCommand,
+        sessionIds: sessions.map((s) => s.id),
+        enabled: true,
+      });
+    };
+
+    run().catch(console.error);
+  }, [sessions, autoLaunchCommand, autoLaunchEnabled, autoLaunch, preResizePanes, computePtyDimensions]);
 
   // ── Sync active from backend focus events ──────────────────────────────────
   useEffect(() => {
@@ -271,6 +333,15 @@ export function TerminalLayout({ sessions, defaultShell: _defaultShell, onCreate
     },
     [layout.mode],
   );
+
+  // ── TUI auto-expand: maximize when any session enters TUI mode ──────────
+  useEffect(() => {
+    const tuiSession = sessions.find((s) => s.is_tui);
+    if (tuiSession && !maximizedId) {
+      setMaximizedId(tuiSession.id);
+      prevModeRef.current = layout.mode;
+    }
+  }, [sessions]); // intentionally not including maximizedId to avoid loop
 
   // ── Render: maximized single panel ─────────────────────────────────────────
   if (maximizedId) {
@@ -458,6 +529,7 @@ export function TerminalLayout({ sessions, defaultShell: _defaultShell, onCreate
               <div
                 key={panel.id}
                 draggable
+                data-panel-id={panel.id}
                 data-span-col={panel.spanCol}
                 data-span-row={panel.spanRow}
                 onDragStart={() => handlePanelDragStart(panel.id)}

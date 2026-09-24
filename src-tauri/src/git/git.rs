@@ -1,9 +1,12 @@
 //! DWO Git Module
 //!
-//! Git integration for version control operations.
+//! Real git integration using tokio::process::Command.
+//! Each method shells out to the `git` CLI against the provided repo_path.
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::process::Stdio;
+use tokio::process::Command;
 
 /// Git status information
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -24,7 +27,6 @@ pub struct GitResult {
 
 /// Git manager
 pub struct GitManager {
-    #[allow(dead_code)]
     repo_path: PathBuf,
 }
 
@@ -34,21 +36,92 @@ impl GitManager {
         Self { repo_path }
     }
 
+    /// Set the repo path (called when workspace.projectPath changes)
+    pub fn set_repo_path(&mut self, path: PathBuf) {
+        self.repo_path = path;
+    }
+
+    /// Run a git command and return its stdout as a String
+    async fn run_git(&self, args: &[&str]) -> Result<String, String> {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(&self.repo_path)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .await
+            .map_err(|e| format!("Failed to run git: {}", e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("git {} failed: {}", args.join(" "), stderr.trim()));
+        }
+
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
+    }
+
     /// Get current git status
     pub async fn status(&self) -> Result<GitStatus, String> {
-        // In a real implementation, this would call git commands
-        // For now, return placeholder data
+        // Check if we're in a git repo
+        if !self.repo_path.join(".git").exists() {
+            return Ok(GitStatus {
+                branch: String::new(),
+                modified: vec![],
+                staged: vec![],
+                untracked: vec![],
+            });
+        }
+
+        // Get branch name
+        let branch = self.run_git(&["rev-parse", "--abbrev-ref", "HEAD"]).await
+            .unwrap_or_else(|_| "main".to_string())
+            .trim()
+            .to_string();
+
+        // Get status --porcelain=v1
+        let porcelain = self.run_git(&["status", "--porcelain=v1"]).await
+            .unwrap_or_default();
+
+        let mut modified = Vec::new();
+        let mut staged = Vec::new();
+        let mut untracked = Vec::new();
+
+        for line in porcelain.lines() {
+            if line.len() < 3 {
+                continue;
+            }
+            let index_status = line.as_bytes()[0] as char;
+            let worktree_status = line.as_bytes()[1] as char;
+            let path = line[3..].to_string();
+
+            // Untracked
+            if index_status == '?' && worktree_status == '?' {
+                untracked.push(path);
+                continue;
+            }
+
+            // Staged (index has changes)
+            if index_status != ' ' && index_status != '?' {
+                staged.push(path.clone());
+            }
+
+            // Modified (worktree has changes)
+            if worktree_status != ' ' && worktree_status != '?' {
+                modified.push(path);
+            }
+        }
+
         Ok(GitStatus {
-            branch: "main".to_string(),
-            modified: vec![],
-            staged: vec![],
-            untracked: vec![],
+            branch,
+            modified,
+            staged,
+            untracked,
         })
     }
 
     /// Stage a file
     pub async fn stage(&self, file: &str) -> Result<GitResult, String> {
-        // Placeholder implementation
+        self.run_git(&["add", file]).await?;
         Ok(GitResult {
             success: true,
             message: format!("Staged {}", file),
@@ -58,46 +131,23 @@ impl GitManager {
 
     /// Commit changes
     pub async fn commit(&self, message: &str) -> Result<GitResult, String> {
-        // Placeholder implementation
+        let output = self.run_git(&["commit", "-m", message]).await?;
         Ok(GitResult {
             success: true,
             message: format!("Committed: {}", message),
-            output: None,
+            output: Some(output),
         })
     }
 
     /// Get git log
-    pub async fn log(&self, _limit: usize) -> Result<Vec<String>, String> {
-        // Placeholder implementation
-        Ok(vec![
-            "abc123 - Initial commit".to_string(),
-            "def456 - Add feature".to_string(),
-        ])
+    pub async fn log(&self, limit: usize) -> Result<Vec<String>, String> {
+        let output = self.run_git(&["log", &format!("-{}", limit), "--oneline"]).await?;
+        Ok(output.lines().map(|l| l.to_string()).collect())
     }
 
     /// Get current branch
     pub async fn branch(&self) -> Result<String, String> {
-        // Placeholder implementation
-        Ok("main".to_string())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::path::PathBuf;
-
-    #[tokio::test]
-    async fn test_git_manager() {
-        let manager = GitManager::new(PathBuf::from("/tmp/test-repo"));
-
-        let status = manager.status().await.unwrap();
-        assert_eq!(status.branch, "main");
-
-        let result = manager.stage("test.txt").await.unwrap();
-        assert!(result.success);
-
-        let result = manager.commit("Test commit").await.unwrap();
-        assert!(result.success);
+        self.run_git(&["rev-parse", "--abbrev-ref", "HEAD"]).await
+            .map(|s| s.trim().to_string())
     }
 }

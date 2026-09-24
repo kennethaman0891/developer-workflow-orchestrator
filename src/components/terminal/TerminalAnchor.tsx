@@ -35,6 +35,8 @@ export function TerminalAnchor({ sessionId, className = '' }: TerminalAnchorProp
   const initRef = useRef(false);
 
   useEffect(() => {
+    // If the element isn't mounted yet (or a previous init is mid-flight),
+    // bail — the effect re-runs on session change after next render.
     if (!terminalRef.current || initRef.current) return;
     initRef.current = true;
     disposedRef.current = false;
@@ -43,12 +45,22 @@ export function TerminalAnchor({ sessionId, className = '' }: TerminalAnchorProp
     let unlistenResizeCleanup: (() => void) | null = null;
     let writeChain = Promise.resolve();
     let fitRaf = 0;
+    // Per-effect cancellation flag: unlike shared refs, this only flips for
+    // THIS run's cleanup, so a stale async import can never resurrect a
+    // terminal for a superseded sessionId.
+    let cancelled = false;
 
     // Dynamic imports to avoid SSR issues
     import('xterm').then(async (xtermModule) => {
+      // Guard against unmount during the async import: the DOM ref may be
+      // null and xterm throws "Terminal requires a parent element".
+      if (cancelled || disposedRef.current || !terminalRef.current) return;
       const { Terminal } = xtermModule;
       const { FitAddon } = await import('xterm-addon-fit');
       const { WebLinksAddon } = await import('xterm-addon-web-links');
+
+      // Re-check again after the second dynamic import resolves
+      if (cancelled || disposedRef.current || !terminalRef.current) return;
 
       const term = new Terminal({
         cursorBlink: true,
@@ -67,12 +79,29 @@ export function TerminalAnchor({ sessionId, className = '' }: TerminalAnchorProp
       const fitAddon = new FitAddon();
       const webLinksAddon = new WebLinksAddon();
       const { ClipboardAddon } = await import('@xterm/addon-clipboard');
+
+      // Double-check the element is still mounted after the final import:
+      // xterm throws "Terminal requires a parent element" if it isn't.
+      if (cancelled || disposedRef.current || !terminalRef.current) {
+        fitAddon.dispose?.();
+        webLinksAddon.dispose?.();
+        term.dispose();
+        return;
+      }
+
       const clipboardAddon = new ClipboardAddon();
 
       term.loadAddon(fitAddon);
       term.loadAddon(webLinksAddon);
       term.loadAddon(clipboardAddon);
-      term.open(terminalRef.current!);
+      try {
+        term.open(terminalRef.current);
+      } catch (e) {
+        // Element disappeared between the check and open — bail gracefully.
+        console.warn('[TerminalAnchor] failed to open terminal:', e);
+        term.dispose();
+        return;
+      }
       fitAddon.fit();
 
       // Focus immediately and also after a short delay
@@ -162,7 +191,9 @@ export function TerminalAnchor({ sessionId, className = '' }: TerminalAnchorProp
     }).catch(console.error);
 
     return () => {
+      cancelled = true;
       disposedRef.current = true;
+      initRef.current = false;
       unlistenOutput?.();
       unlistenResizeCleanup?.();
       const term = termRef.current;
