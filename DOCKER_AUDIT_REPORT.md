@@ -133,7 +133,7 @@ All manifests build successfully with `kubectl kustomize`:
 
 ```bash
 # Production web mode
-cd /Users/kennethaman/DWO
+cd ~/DWO
 docker compose up -d
 # Open http://localhost:3000
 
