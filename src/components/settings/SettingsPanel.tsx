@@ -2,19 +2,27 @@
 
 import { useState, useEffect } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
+import { useSettings } from '@/contexts/SettingsContext';
 import { useTerminals } from '@/hooks/useTerminals';
 import { getShellName } from '@/lib/shell';
 
 export function SettingsPanel() {
-  const { theme } = useTheme();
+  const { theme, setTheme, currentThemeKey } = useTheme();
   const { defaultShell, setShell } = useTerminals();
-  const [fontSize, setFontSize] = useState(14);
-  const [wordWrap, setWordWrap] = useState(true);
-  const [minimap, setMinimap] = useState(true);
-  const [activeTheme, setActiveTheme] = useState('dark');
+  const {
+    fontSize,
+    wordWrap,
+    minimap,
+    transparency,
+    setFontSize,
+    setWordWrap,
+    setMinimap,
+    setTransparency,
+  } = useSettings();
+
   const [selectedShell, setSelectedShell] = useState(() => getShellName(defaultShell));
 
-  // Update selectedShell when defaultShell changes
+  // Keep selectedShell in sync when defaultShell changes externally
   useEffect(() => {
     setSelectedShell(getShellName(defaultShell));
   }, [defaultShell]);
@@ -36,6 +44,7 @@ export function SettingsPanel() {
     { id: 'dark', label: 'Dark', preview: '#0a0a0a' },
     { id: 'midnight', label: 'Midnight', preview: '#0d1b2a' },
     { id: 'ocean', label: 'Ocean', preview: '#1a1b26' },
+    { id: 'carbon', label: 'Carbon', preview: '#161616' },
   ];
 
   return (
@@ -58,14 +67,15 @@ export function SettingsPanel() {
           {themes.map(t => (
             <button
               key={t.id}
-              onClick={() => setActiveTheme(t.id)}
+              onClick={() => setTheme(t.id)}
               style={{
                 padding: '12px',
                 background: t.preview,
-                border: `2px solid ${activeTheme === t.id ? theme.colors.accent : theme.colors.border}`,
+                border: `2px solid ${currentThemeKey === t.id ? theme.colors.accent : theme.colors.border}`,
                 borderRadius: '6px',
                 cursor: 'pointer',
                 textAlign: 'center',
+                transition: 'border-color 0.15s',
               }}
             >
               <div style={{ width: '32px', height: '32px', background: t.preview, border: '1px solid rgba(255,255,255,0.1)', borderRadius: '4px', margin: '0 auto 8px' }} />
@@ -117,8 +127,15 @@ export function SettingsPanel() {
               ))}
             </select>
           </SettingRow>
-          <SettingRow label="Transparency">
-            <input type="range" min="0" max="100" defaultValue="0" style={{ width: '120px' }} />
+          <SettingRow label="Transparency" value={`${transparency}%`}>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={transparency}
+              onChange={e => setTransparency(Number(e.target.value))}
+              style={{ width: '120px' }}
+            />
           </SettingRow>
         </div>
       </section>
