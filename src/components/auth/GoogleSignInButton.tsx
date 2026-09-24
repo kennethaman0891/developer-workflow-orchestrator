@@ -3,7 +3,8 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { googleOAuthPopup, getGoogleClientId, loadGoogleScript, saveGoogleClientId } from '@/lib/googleOAuth';
+import { googleOAuthPopup, getGoogleClientId, saveGoogleClientId } from '@/lib/googleOAuth';
+import { loadGoogleScript } from '@/lib/gsi';
 
 interface GoogleSignInButtonProps {
   size?: 'large' | 'medium' | 'small';
