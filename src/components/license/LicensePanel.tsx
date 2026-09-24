@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/lib/tauri';
 import { useTheme } from '@/contexts/ThemeContext';
 
 type LicenseTier = 'free' | 'pro';

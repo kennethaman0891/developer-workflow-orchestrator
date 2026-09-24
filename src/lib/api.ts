@@ -4,7 +4,7 @@
  * Centralized module for all file system operations via Tauri backend.
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/lib/tauri';
 
 export interface FsEntry {
   name: string;

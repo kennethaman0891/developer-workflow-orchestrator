@@ -104,10 +104,12 @@ function WorkspaceItem({
   ws,
   isActive,
   onClick,
+  onClose,
 }: {
   ws: any;
   isActive: boolean;
   onClick: () => void;
+  onClose?: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
 
@@ -204,6 +206,44 @@ function WorkspaceItem({
           {ws.template}
         </span>
       )}
+      {/* Close button - shown on hover */}
+      {onClose && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onClose();
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = 'var(--dwo-color-error, #ef4444)';
+            e.currentTarget.style.background = 'var(--dwo-color-error, #ef4444)18';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = 'var(--dwo-color-text-muted, #888)';
+            e.currentTarget.style.background = 'transparent';
+          }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '18px',
+            height: '18px',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer',
+            color: 'var(--dwo-color-text-muted, #888)',
+            background: 'transparent',
+            transition: 'color 0.12s, background 0.12s',
+            flexShrink: 0,
+            opacity: hovered ? 1 : 0,
+          }}
+          title="Close workspace"
+        >
+          <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <line x1="4" y1="4" x2="12" y2="12" />
+            <line x1="12" y1="4" x2="4" y2="12" />
+          </svg>
+        </button>
+      )}
     </button>
   );
 }
@@ -218,7 +258,7 @@ export function Sidebar({
   onOpenWizard,
 }: SidebarProps) {
   const { theme } = useTheme();
-  const { create: createWs, selectFolder, activate: activateWs } = useWorkspaces();
+  const { create: createWs, selectFolder, activate: activateWs, close: closeWs } = useWorkspaces();
   const { currentUser, signOut } = useAuth();
   const [newWsName, setNewWsName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
@@ -581,6 +621,7 @@ export function Sidebar({
                   activateWs(ws.id);
                   setMainView?.('workspace');
                 }}
+                onClose={() => closeWs(ws.id)}
               />
             </div>
           ))}

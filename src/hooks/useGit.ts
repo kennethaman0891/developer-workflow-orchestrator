@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/lib/tauri';
 
 export interface GitStatus {
   branch: string;
@@ -23,7 +23,7 @@ export function useGit() {
   const getStatus = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await invoke<GitStatus>('git_status');
+      const result = await invoke<GitStatus>('git_status', undefined, { branch: '', modified: [], staged: [], untracked: [] });
       setStatus(result);
       return result;
     } catch (error) {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/lib/tauri';
 import { getDefaultShell } from '@/lib/shell';
 import type { SessionMeta } from '@/lib/terminal';
 
@@ -14,7 +14,7 @@ export function useTerminals() {
 
   const list = useCallback(async () => {
     try {
-      const result = await invoke<SessionMeta[]>('terminal_list');
+      const result = await invoke<SessionMeta[]>('terminal_list', undefined, []);
       setSessions(result);
       return result;
     } catch (error) {

@@ -2,7 +2,7 @@
  * DWO Tauri Bridge - Workspace Operations
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/lib/tauri';
 
 export interface PaneSlot {
   tty: string | null;

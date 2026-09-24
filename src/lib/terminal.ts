@@ -3,7 +3,7 @@
  * Wraps Tauri invoke calls for terminal management
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/lib/tauri';
 
 export interface SessionMeta {
   id: string;

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/lib/tauri';
 
 export interface PluginManifest {
   id: string;
@@ -24,7 +24,7 @@ export function usePlugins() {
 
   const listPlugins = useCallback(async () => {
     try {
-      const result = await invoke<PluginState[]>('plugin_list');
+      const result = await invoke<PluginState[]>('plugin_list', undefined, []);
       setPlugins(result);
       return result;
     } catch (error) {
@@ -75,7 +75,7 @@ export function usePlugins() {
 
   const enabledPlugins = useCallback(async (): Promise<PluginManifest[]> => {
     try {
-      return await invoke<PluginManifest[]>('plugin_enabled');
+      return await invoke<PluginManifest[]>('plugin_enabled', undefined, []);
     } catch (error) {
       console.error('Failed to get enabled plugins:', error);
       return [];

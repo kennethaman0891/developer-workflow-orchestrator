@@ -14,6 +14,7 @@ import { SettingsProvider } from '@/contexts/SettingsContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { WizardView } from '@/components/workspace/WizardView';
 import { terminalCreate } from '@/lib/terminal';
+import { isTauri } from '@/lib/tauri';
 
 type MainView = 'projects' | 'workspace' | 'grid' | 'ide' | 'collaboration' | 'settings';
 
@@ -57,6 +58,9 @@ function AppShell() {
     didInitRef.current = true;
 
     const init = async () => {
+      // Skip backend-dependent init when running outside Tauri (web/Docker mode)
+      if (!isTauri()) return;
+
       const wsList = await loadWorkspaces();
 
       // Check if we were launched from the CLI (scripts/dwo wrote launch-cwd)

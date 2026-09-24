@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react';
 import type { Terminal, ITerminalOptions } from 'xterm';
 import type { FitAddon } from 'xterm-addon-fit';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/lib/tauri';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import 'xterm/css/xterm.css';
 import { useSettings } from '@/contexts/SettingsContext';
@@ -206,22 +206,30 @@ export function TerminalAnchor({ sessionId, className = '' }: TerminalAnchorProp
   // ── Retry fit if container was 0×0 on first render ────────────────────────
   // This handles the case where the terminal mounts before its parent has
   // computed its final layout (common in split views and modals).
+  // Also re-fits when display:none → visible because xterm starts at 0×0 then.
   useEffect(() => {
     if (!containerRef.current || !fitAddonRef.current) return;
 
-    const retryFit = () => {
+    let cancelled = false;
+
+    const tryFit = () => {
+      if (cancelled) return;
       const rect = containerRef.current?.getBoundingClientRect();
       if (rect && rect.width > 0 && rect.height > 0) {
+        // Container is live — fit once, then keep watching for resizes.
         fitAddonRef.current?.fit();
-      } else {
-        // Container still 0×0 — retry after a short delay
-        setTimeout(retryFit, 50);
+        return;
       }
+      // Container still 0×0 (likely display:none) — retry for up to ~5 s.
+      setTimeout(tryFit, 100);
     };
 
-    // Initial retry after paint
-    const timer = setTimeout(retryFit, 100);
-    return () => clearTimeout(timer);
+    // Fire after paint, then every 100 ms until the container has real size.
+    const timer = setTimeout(tryFit, 100);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [sessionId]);
 
   // Reactively update transparency and font-size without tearing down the

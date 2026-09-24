@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/lib/tauri';
 
 export interface Task {
   id: string;
@@ -31,7 +31,7 @@ export function useTasks() {
 
   const listTasks = useCallback(async () => {
     try {
-      const result = await invoke<Task[]>('task_list');
+      const result = await invoke<Task[]>('task_list', undefined, []);
       setTasks(result);
       return result;
     } catch (error) {

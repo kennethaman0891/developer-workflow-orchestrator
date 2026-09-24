@@ -227,7 +227,7 @@ export function TerminalLayout({
   const launchedKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!autoLaunchCommand || !autoLaunchEnabled || sessions.length === 0) return;
+    if (!autoLaunchCommand || !autoLaunchEnabled || !sessions || sessions.length === 0) return;
 
     const launchKey = `${autoLaunchCommand}:${sessions.map((s) => s.id).join(',')}`;
     if (launchedKeyRef.current === launchKey) return;
@@ -278,7 +278,7 @@ export function TerminalLayout({
   // ── Sync panels with backend sessions ─────────────────────────────────────
   const loadedOnceRef = useRef(false);
   useEffect(() => {
-    if (sessions.length === 0 && !loadedOnceRef.current) return;
+    if ((!sessions || sessions.length === 0) && !loadedOnceRef.current) return;
     loadedOnceRef.current = true;
     syncPanels(sessions.map((s) => s.id));
   }, [sessions, syncPanels]);
@@ -336,6 +336,7 @@ export function TerminalLayout({
 
   // ── TUI auto-expand: maximize when any session enters TUI mode ──────────
   useEffect(() => {
+    if (!sessions || sessions.length === 0) return;
     const tuiSession = sessions.find((s) => s.is_tui);
     if (tuiSession && !maximizedId) {
       setMaximizedId(tuiSession.id);
@@ -344,6 +345,20 @@ export function TerminalLayout({
   }, [sessions]); // intentionally not including maximizedId to avoid loop
 
   // ── Render: maximized single panel ─────────────────────────────────────────
+  if (!sessions || sessions.length === 0) {
+    return (
+      <div data-split-container="true" style={containerStyle}>
+        <div style={emptyStyle}>
+          <div style={{ fontSize: '28px', marginBottom: '8px' }}>⌘</div>
+          <div style={{ color: '#888', fontSize: '14px' }}>No terminals yet</div>
+          <button onClick={handleCreate} style={{ ...createBtnStyle, marginTop: '12px' }}>
+            + Terminal
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (maximizedId) {
     const session = sessions.find((s) => s.id === maximizedId);
     if (!session) return null;
@@ -488,7 +503,7 @@ export function TerminalLayout({
         </div>
 
         <span style={countStyle}>
-          {sessions.length} terminal{sessions.length !== 1 ? 's' : ''}
+          {(sessions?.length ?? 0)} terminal{(sessions?.length ?? 0) !== 1 ? 's' : ''}
         </span>
       </div>
 

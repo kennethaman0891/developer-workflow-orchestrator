@@ -2,7 +2,7 @@
  * DWO Tauri Bridge - License Operations (Phase 3)
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/lib/tauri';
 
 export type Tier = 'free' | 'pro';
 

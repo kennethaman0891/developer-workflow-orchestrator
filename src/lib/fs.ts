@@ -2,7 +2,7 @@
  * DWO Tauri Bridge - File System Operations (Phase 2)
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/lib/tauri';
 
 export interface FsEntry {
   name: string;

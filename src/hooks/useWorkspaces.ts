@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/lib/tauri';
 import { type Workspace } from '@/lib/workspace';
 
 export function useWorkspaces() {
@@ -12,9 +12,9 @@ export function useWorkspaces() {
   /** Load workspaces from Rust state. Stable identity — does NOT depend on activeId. */
   const load = useCallback(async (): Promise<Workspace[]> => {
     try {
-      const result = await invoke<Workspace[]>('list_workspaces');
+      const result = await invoke<Workspace[]>('list_workspaces', undefined, []);
       setWorkspaces(result);
-      const state = await invoke<{ active_workspace_id: string | null }>('get_workspace_state');
+      const state = await invoke<{ active_workspace_id: string | null }>('get_workspace_state', undefined, { active_workspace_id: null });
       if (state.active_workspace_id && result.some(w => w.id === state.active_workspace_id)) {
         setActiveId((prev) => prev ?? state.active_workspace_id);
       } else if (result.length > 0) {

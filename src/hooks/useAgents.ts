@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/lib/tauri';
 
 export interface AgentTask {
   id: string;
@@ -29,7 +29,7 @@ export function useAgents() {
 
   const listTasks = useCallback(async () => {
     try {
-      const result = await invoke<AgentTask[]>('agent_list_tasks');
+      const result = await invoke<AgentTask[]>('agent_list_tasks', undefined, []);
       setTasks(result);
       return result;
     } catch (error) {
@@ -68,7 +68,7 @@ export function useAgents() {
 
   const listConfigs = useCallback(async () => {
     try {
-      const result = await invoke<AgentConfig[]>('agent_list_configs');
+      const result = await invoke<AgentConfig[]>('agent_list_configs', undefined, []);
       setConfigs(result);
       return result;
     } catch (error) {

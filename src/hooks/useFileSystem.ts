@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { invoke } from '@/lib/tauri';
 
 export interface FsEntry {
   name: string;
@@ -19,7 +19,7 @@ export function useFileSystem() {
   const list = useCallback(async (path: string) => {
     setLoading(true);
     try {
-      const result = await invoke<FsEntry[]>('list_dir', { path });
+      const result = await invoke<FsEntry[]>('list_dir', { path }, []);
       setEntries(result);
       setCurrentPath(path);
       return result;
@@ -56,7 +56,7 @@ export function useFileSystem() {
   }, []);
 
   const search = useCallback(async (pattern: string, path?: string): Promise<string[]> => {
-    return invoke<string[]>('search', { pattern, path });
+    return invoke<string[]>('search', { pattern, path }, []);
   }, []);
 
   // Load home directory on mount
