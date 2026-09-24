@@ -1,0 +1,31 @@
+# ─── Docker Compose — Dev Mode (hot-reload) ───────────────────────────────────
+#
+# Mounts local source into the container for live development.
+# Any change to .tsx/.ts files triggers Next.js hot-reload.
+#
+# Usage:
+#   docker compose -f docker-compose.dev.yml up
+#
+# Caveats:
+#   - You must have Node.js >= 20 installed locally for this to work well
+#   - First build may take a while as npm ci runs inside the container
+
+
+services:
+  dwo-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    image: dwo:dev
+    ports:
+      - "${DWO_PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=development
+      - TAURI_DEV_PORT=3000
+    volumes:
+      # Mount source so hot-reload works
+      - .:/app
+      - /app/node_modules       # prevent host node_modules from shadowing container's
+      - /app/.next              # prevent host .next from shadowing container's
+      - /app/out                # allow clean rebuilds
+    restart: "no"

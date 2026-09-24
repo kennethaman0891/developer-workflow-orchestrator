@@ -12,7 +12,7 @@
 
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { SessionMeta } from '@/hooks/useTerminals';
 import { useTerminalLayout } from '@/hooks/useTerminalLayout';
 import { TerminalPanel } from './TerminalPanel';
@@ -205,19 +205,15 @@ export function TerminalLayout({ sessions, defaultShell: _defaultShell, onCreate
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
 
-  // Split-mode divider positions
+  // Split-mode divider position
   const [splitPos, setSplitPos] = useState(0.5);
 
   // ── Sync active from backend focus events ──────────────────────────────────
   useEffect(() => {
     syncActiveFromSessions();
-  }, [sessions.length, syncActiveFromSessions]);
+  }, [sessions, syncActiveFromSessions]);
 
   // ── Sync panels with backend sessions ─────────────────────────────────────
-  // Prune panels for dead sessions (stale localStorage layouts) and add panels
-  // for any running session not yet in the layout (auto-created terminals).
-  // The loadedOnce guard avoids clearing a valid saved layout before the first
-  // `terminal_list` call has resolved with real data.
   const loadedOnceRef = useRef(false);
   useEffect(() => {
     if (sessions.length === 0 && !loadedOnceRef.current) return;
@@ -226,9 +222,6 @@ export function TerminalLayout({ sessions, defaultShell: _defaultShell, onCreate
   }, [sessions, syncPanels]);
 
   // ── Create terminal helper ─────────────────────────────────────────────────
-  // Delegates to the shared useTerminals path via the parent (TerminalPool) so
-  // the session list is always consistent. The sync effect above will pick up
-  // the new session and add its panel automatically.
   const handleCreate = useCallback(() => {
     onCreate?.();
   }, [onCreate]);
@@ -257,7 +250,6 @@ export function TerminalLayout({ sessions, defaultShell: _defaultShell, onCreate
   const handleClose = useCallback(
     (id: string) => {
       removePanel(id);
-      // Also terminate the backend PTY session to prevent zombie processes
       onCloseSession?.(id);
     },
     [removePanel, onCloseSession],
@@ -265,23 +257,31 @@ export function TerminalLayout({ sessions, defaultShell: _defaultShell, onCreate
 
   // ── Maximize / restore ─────────────────────────────────────────────────────
   const [maximizedId, setMaximizedId] = useState<string | null>(null);
+  const prevModeRef = useRef<'grid' | 'split-h' | 'split-v' | null>(null);
 
   const handleMaximize = useCallback(
     (id: string) => {
-      setMaximizedId((prev) => (prev === id ? null : id));
+      setMaximizedId((prev) => {
+        if (prev === id) {
+          return null;
+        }
+        prevModeRef.current = layout.mode;
+        return id;
+      });
     },
-    [],
+    [layout.mode],
   );
 
   // ── Render: maximized single panel ─────────────────────────────────────────
   if (maximizedId) {
     const session = sessions.find((s) => s.id === maximizedId);
     if (!session) return null;
+    const prevMode = prevModeRef.current ?? LayoutMode.GRID;
     return (
-      <div style={containerStyle}>
+      <div style={{ ...containerStyle, padding: '8px' }}>
         <div style={maximizedWrapStyle}>
           <button onClick={() => setMaximizedId(null)} style={restoreBtnStyle}>
-            ⤓ Restore
+            ⤓ Restore ({prevMode === LayoutMode.SPLIT_H ? 'split-h' : prevMode === LayoutMode.SPLIT_V ? 'split-v' : 'grid'})
           </button>
           <TerminalPanel
             id={session.id}
@@ -297,8 +297,9 @@ export function TerminalLayout({ sessions, defaultShell: _defaultShell, onCreate
     );
   }
 
-  // ── Render: split-h ────────────────────────────────────────────────────────
-  if (layout.mode === LayoutMode.SPLIT_H && layout.panels.length >= 2) {
+  // ── Render: split-h (exactly 2 panels side-by-side with draggable divider) ──
+  // Falls through to grid mode for 0, 1, or 3+ panels.
+  if (layout.mode === LayoutMode.SPLIT_H && layout.panels.length === 2) {
     const p1 = layout.panels[0];
     const p2 = layout.panels[1];
     const s1 = sessions.find((s) => s.id === p1.id);
@@ -334,8 +335,9 @@ export function TerminalLayout({ sessions, defaultShell: _defaultShell, onCreate
     );
   }
 
-  // ── Render: split-v ────────────────────────────────────────────────────────
-  if (layout.mode === LayoutMode.SPLIT_V && layout.panels.length >= 2) {
+  // ── Render: split-v (exactly 2 panels stacked with draggable divider) ───────
+  // Falls through to grid mode for 0, 1, or 3+ panels.
+  if (layout.mode === LayoutMode.SPLIT_V && layout.panels.length === 2) {
     const p1 = layout.panels[0];
     const p2 = layout.panels[1];
     const s1 = sessions.find((s) => s.id === p1.id);
@@ -372,17 +374,24 @@ export function TerminalLayout({ sessions, defaultShell: _defaultShell, onCreate
   }
 
   // ── Render: grid mode ──────────────────────────────────────────────────────
-  const totalCols = Math.max(1, Math.ceil(layout.panels.length / 2));
-  const totalRows = Math.ceil(layout.panels.length / totalCols);
+  // Calculate grid dimensions from ACTUAL panel positions and spans, not just
+  // panel count. This ensures resized panels (spanning multiple cells) fit
+  // properly within the grid.
+  const numPanels = layout.panels.length;
+  let maxCol = 0;
+  let maxRow = 0;
+  for (const panel of layout.panels) {
+    maxCol = Math.max(maxCol, panel.col + panel.spanCol);
+    maxRow = Math.max(maxRow, panel.row + panel.spanRow);
+  }
+  // Ensure minimum sensible grid size (at least 2 cols for readability)
+  const totalCols = Math.max(2, maxCol);
+  const totalRows = Math.max(1, maxRow);
 
   return (
     <div data-split-container="true" style={containerStyle}>
       {/* Toolbar */}
       <div style={toolbarStyle}>
-        <button onClick={handleCreate} style={createBtnStyle}>
-          + Terminal
-        </button>
-
         <div style={modeGroupStyle}>
           <button
             onClick={() => setMode(LayoutMode.GRID)}
@@ -412,7 +421,8 @@ export function TerminalLayout({ sessions, defaultShell: _defaultShell, onCreate
         </span>
       </div>
 
-      {/* Grid */}
+      {/* Grid — FIX: overflow:hidden instead of auto so terminals are
+          constrained to exact cell dimensions. Padding moved to individual cells. */}
       {layout.panels.length === 0 ? (
         <div style={emptyStyle}>
           <div style={{ fontSize: '28px', marginBottom: '8px' }}>⌘</div>
@@ -431,8 +441,9 @@ export function TerminalLayout({ sessions, defaultShell: _defaultShell, onCreate
             gridTemplateRows: `repeat(${totalRows}, 1fr)`,
             gap: '6px',
             padding: '8px',
-            overflow: 'auto',
+            overflow: 'hidden',
             minHeight: 0,
+            minWidth: 0,
           }}
           onDragOver={(e) => e.preventDefault()}
           onDrop={handlePanelDrop}
@@ -466,6 +477,7 @@ export function TerminalLayout({ sessions, defaultShell: _defaultShell, onCreate
                   transition: 'opacity 0.15s, outline 0.15s',
                   minHeight: 0,
                   minWidth: 0,
+                  padding: '6px',
                 }}
               >
                 <TerminalPanel
@@ -498,6 +510,8 @@ const containerStyle: React.CSSProperties = {
   flexDirection: 'column',
   overflow: 'hidden',
   background: '#0a0a0a',
+  minHeight: 0,
+  minWidth: 0,
 };
 
 const toolbarStyle: React.CSSProperties = {
@@ -550,8 +564,8 @@ const maximizedWrapStyle: React.CSSProperties = {
   position: 'relative',
   display: 'flex',
   flexDirection: 'column',
-  padding: '8px',
-  gap: '8px',
+  minHeight: 0,
+  minWidth: 0,
 };
 
 const restoreBtnStyle: React.CSSProperties = {

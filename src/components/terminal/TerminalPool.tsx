@@ -1,31 +1,24 @@
 'use client';
 
-import { useEffect } from 'react';
 import { useTerminals } from '@/hooks/useTerminals';
 import { TerminalLayout } from './TerminalLayout';
 
 interface TerminalPoolProps {
   view?: 'workspace' | 'grid';
-  /** Per-workspace layout key (isolates Open Code vs Cloud Code layouts) */
+  /** Per-workspace localStorage key so Open Code / Cloud Code keep separate layouts */
   layoutKey?: string;
+  /** Callback to create a new terminal — wired from the parent (page.tsx) */
+  onCreateTerminal?: () => void;
 }
 
-export function TerminalPool({ view: _view = 'grid', layoutKey }: TerminalPoolProps) {
-  const { sessions, create, close, defaultShell } = useTerminals();
-
-  // Auto-create a terminal on mount if none exist
-  useEffect(() => {
-    if (sessions.length === 0) {
-      create(defaultShell).catch(console.error);
-    }
-  }, [sessions.length, create, defaultShell]);
+export function TerminalPool({ view: _view = 'grid', layoutKey, onCreateTerminal }: TerminalPoolProps) {
+  const { sessions, close } = useTerminals();
 
   return (
     <TerminalLayout
       sessions={sessions}
-      defaultShell={defaultShell}
       layoutKey={layoutKey}
-      onCreate={() => create(defaultShell)}
+      onCreate={() => onCreateTerminal?.()}
       onCloseSession={(id) => close(id)}
     />
   );

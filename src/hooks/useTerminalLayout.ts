@@ -72,12 +72,23 @@ export function useTerminalLayout(
   setActiveId: (id: string) => void,
   storageKey: string = STORAGE_KEY,
 ) {
-  const [layout, setLayout] = useState<LayoutState>(() => {
-    const saved = loadLayout(storageKey);
-    if (saved && saved.panels.length > 0) return saved;
-    const initial = sessions[0]?.id ?? null;
-    return initial ? initLayout(initial) : { mode: 'grid', panels: [], activeId: null };
+  // Initialize with empty/default state to ensure SSR/client consistency.
+  // The actual layout is loaded from localStorage after mount in useEffect.
+  const [layout, setLayout] = useState<LayoutState>({
+    mode: 'grid',
+    panels: [],
+    activeId: null,
   });
+  const hasMounted = useRef(false);
+
+  // Load persisted layout after first render (client-side only)
+  useEffect(() => {
+    const saved = loadLayout(storageKey);
+    if (saved && saved.panels.length > 0) {
+      setLayout(saved);
+    }
+    hasMounted.current = true;
+  }, [storageKey]);
 
   const [gridSize] = useState({ cols: 4, rows: 3 }); // visual grid size hint
   const persistRef = useRef(false);
@@ -107,6 +118,37 @@ export function useTerminalLayout(
 
   // ── Actions ────────────────────────────────────────────────────────────────
 
+  /**
+   * Find the first empty cell in the grid by scanning row-by-row, then
+   * column-by-column. This ensures new panels never overlap existing ones,
+   * even when some panels span multiple cells.
+   */
+  function findFirstEmptyCell(panels: Panel[]): { col: number; row: number } {
+    // Scan up to a large grid size (more than enough for typical use)
+    for (let row = 0; row < 20; row++) {
+      for (let col = 0; col < 10; col++) {
+        let occupied = false;
+        for (const panel of panels) {
+          // Check if (col, row) falls within this panel's bounds
+          if (
+            col >= panel.col &&
+            col < panel.col + panel.spanCol &&
+            row >= panel.row &&
+            row < panel.row + panel.spanRow
+          ) {
+            occupied = true;
+            break;
+          }
+        }
+        if (!occupied) {
+          return { col, row };
+        }
+      }
+    }
+    // Fallback (should never reach here)
+    return { col: 0, row: 0 };
+  }
+
   const addPanel = useCallback(
     (sessionId: string) => {
       setLayout((prev) => {
@@ -116,14 +158,9 @@ export function useTerminalLayout(
         if (newPanels.length === 0) {
           newPanels.push({ id: sessionId, col: 0, row: 0, spanCol: 1, spanRow: 1 });
         } else {
-          // Place next to the last panel, wrapping to next row if needed
-          const last = newPanels[newPanels.length - 1];
-          const nextCol = last.col + last.spanCol;
-          if (nextCol < 3) {
-            newPanels.push({ id: sessionId, col: nextCol, row: last.row, spanCol: 1, spanRow: 1 });
-          } else {
-            newPanels.push({ id: sessionId, col: 0, row: last.row + last.spanRow, spanCol: 1, spanRow: 1 });
-          }
+          // Find the first empty cell to avoid overlapping resized panels
+          const pos = findFirstEmptyCell(newPanels);
+          newPanels.push({ id: sessionId, col: pos.col, row: pos.row, spanCol: 1, spanRow: 1 });
         }
         return { ...prev, panels: newPanels, activeId: sessionId };
       });
@@ -251,20 +288,9 @@ export function useTerminalLayout(
         if (existing.has(id)) continue;
         changed = true;
         lastAdded = id;
-        const last = panels[panels.length - 1];
-        let col = 0;
-        let row = 0;
-        if (last) {
-          const nextCol = last.col + last.spanCol;
-          if (nextCol < 3) {
-            col = nextCol;
-            row = last.row;
-          } else {
-            col = 0;
-            row = last.row + last.spanRow;
-          }
-        }
-        panels.push({ id, col, row, spanCol: 1, spanRow: 1 });
+        // Find first empty cell to avoid overlapping resized panels
+        const pos = findFirstEmptyCell(panels);
+        panels.push({ id, col: pos.col, row: pos.row, spanCol: 1, spanRow: 1 });
       }
 
       if (!changed) return prev;

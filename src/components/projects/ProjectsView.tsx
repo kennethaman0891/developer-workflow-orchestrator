@@ -47,8 +47,6 @@ export function ProjectsView() {
   const projects = [
     { title: 'New Workspace', desc: 'Create empty workspace', icon: '📁' },
     { title: 'Import Project', desc: 'Import from ZIP or Git', icon: '📦' },
-    { title: 'Agent Pipeline', desc: 'Multi-agent workflow', icon: '🤖' },
-    { title: 'Templates', desc: 'Starter templates', icon: '📋' },
   ];
 
   const handleCreate = async () => {

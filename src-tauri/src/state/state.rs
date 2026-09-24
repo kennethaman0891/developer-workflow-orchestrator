@@ -11,17 +11,20 @@ use uuid::Uuid;
 pub struct Workspace {
     pub id: String,
     pub name: String,
+    /// Project folder path selected via system file picker (e.g. /Users/me/project)
+    pub path: Option<String>,
     pub panes: Vec<String>,
     pub created_at: String,
     pub updated_at: String,
 }
 
 impl Workspace {
-    pub fn new(name: &str) -> Self {
+    pub fn new(name: &str, path: Option<&str>) -> Self {
         let now = chrono::Utc::now().to_rfc3339();
         Self {
             id: Uuid::new_v4().to_string(),
             name: name.to_string(),
+            path: path.map(|p| p.to_string()),
             panes: Vec::new(),
             created_at: now.clone(),
             updated_at: now,
@@ -81,12 +84,24 @@ impl AppState {
     }
 
     /// Create a new workspace
-    pub fn create_workspace(&mut self, name: &str) -> &Workspace {
-        let ws = Workspace::new(name);
+    pub fn create_workspace(&mut self, name: &str, path: Option<&str>) -> &Workspace {
+        let ws = Workspace::new(name, path);
         self.workspaces.push(ws);
         self.active_workspace_id = Some(self.workspaces.last().unwrap().id.clone());
         self.save().ok();
         self.workspaces.last().unwrap()
+    }
+
+    /// Set the project path for a workspace
+    pub fn set_workspace_path(&mut self, id: &str, path: &str) -> Result<(), String> {
+        if let Some(ws) = self.workspaces.iter_mut().find(|w| w.id == id) {
+            ws.path = Some(path.to_string());
+            ws.updated_at = chrono::Utc::now().to_rfc3339();
+            self.save().map_err(|e| e.to_string())?;
+            Ok(())
+        } else {
+            Err(format!("Workspace not found: {}", id))
+        }
     }
 
     /// Get a workspace by ID

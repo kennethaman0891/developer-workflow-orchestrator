@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useWorkspaces } from '@/hooks/useWorkspaces';
 import { useAuth } from '@/contexts/AuthContext';
+
+type ViewId = 'workspace' | 'projects' | 'ide' | 'collaboration' | 'settings';
 
 interface SidebarProps {
   workspaces?: any[];
@@ -11,18 +13,59 @@ interface SidebarProps {
   setSidebarOpen?: (open: boolean) => void;
   setMainView?: (view: string) => void;
   currentView?: string;
+  onCreateTerminal?: () => void;
 }
 
-const VIEWS = [
-  { id: 'workspace', label: 'Workspace', icon: '💻' },
-  { id: 'projects', label: 'Projects', icon: '📁' },
-  { id: 'ide', label: 'IDE', icon: '✏️' },
-  { id: 'collaboration', label: 'Collab', icon: '👥' },
-  { id: 'plugins', label: 'Plugins', icon: '🧩' },
-  { id: 'settings', label: 'Settings', icon: '⚙️' },
+interface ViewItem {
+  id: ViewId;
+  label: string;
+  icon: (color: string) => ReactNode;
+}
+
+const VIEW_ICONS: Record<ViewId, (color: string) => ReactNode> = {
+  workspace: (color) => (
+    <svg viewBox="0 0 16 16" fill="none" stroke={color} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
+      <rect x="1" y="2" width="14" height="9" rx="1.5" />
+      <path d="M4 14h8" />
+      <path d="M8 11v3" />
+    </svg>
+  ),
+  projects: (color) => (
+    <svg viewBox="0 0 16 16" fill="none" stroke={color} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
+      <path d="M1 4a1 1 0 011-1h3.5l1 1H14a1 1 0 011 1v7a1 1 0 01-1 1H2a1 1 0 01-1-1V4z" />
+    </svg>
+  ),
+  ide: (color) => (
+    <svg viewBox="0 0 16 16" fill="none" stroke={color} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
+      <path d="M13.5 2.5l-9 9-3.5 1 1-3.5 9-9a1.06 1.06 0 011.5 1.5z" />
+      <path d="M10.5 5.5l2 2" />
+    </svg>
+  ),
+  collaboration: (color) => (
+    <svg viewBox="0 0 16 16" fill="none" stroke={color} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
+      <circle cx="6" cy="5" r="2.5" />
+      <circle cx="10" cy="5" r="2" />
+      <path d="M1 13c0-2.5 2-4.5 5-4.5s5 2 5 4.5" />
+      <path d="M11 9c2.5 0 4 1.5 4 4" />
+    </svg>
+  ),
+  settings: (color) => (
+    <svg viewBox="0 0 16 16" fill="none" stroke={color} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
+      <circle cx="8" cy="8" r="2.5" />
+      <path d="M13.5 8a5.5 5.5 0 01-.2 1.4l1.2.8-1 1.7-1.5-.6a5.5 5.5 0 01-1.2.7l-.2 1.4v1.8h-2l-.2-1.4a5.5 5.5 0 01-1.2-.7l-1.5.6-1-1.7 1.2-.8a5.5 5.5 0 01-.2-1.4 5.5 5.5 0 01.2-1.4l-1.2-.8 1-1.7 1.5.6a5.5 5.5 0 011.2-.7l.2-1.4V2h2l.2 1.4a5.5 5.5 0 011.2.7l1.5-.6 1 1.7-1.2.8c.1.5.2.9.2 1.4z" />
+    </svg>
+  ),
+};
+
+const VIEWS: ViewItem[] = [
+  { id: 'workspace', label: 'Workspace', icon: VIEW_ICONS.workspace },
+  { id: 'projects', label: 'Projects', icon: VIEW_ICONS.projects },
+  { id: 'ide', label: 'IDE', icon: VIEW_ICONS.ide },
+  { id: 'collaboration', label: 'Collab', icon: VIEW_ICONS.collaboration },
+  { id: 'settings', label: 'Settings', icon: VIEW_ICONS.settings },
 ];
 
-export function Sidebar({ workspaces = [], activeId = '', setMainView, currentView = 'workspace' }: SidebarProps) {
+export function Sidebar({ workspaces = [], activeId = '', setSidebarOpen, setMainView, currentView = 'workspace', onCreateTerminal }: SidebarProps) {
   const { theme } = useTheme();
   const { create: createWs, selectFolder, activate: activateWs } = useWorkspaces();
   const { currentUser, signOut } = useAuth();
@@ -48,16 +91,26 @@ export function Sidebar({ workspaces = [], activeId = '', setMainView, currentVi
    * uses the folder name as the workspace name and creates it.
    */
   const handlePickFolder = async () => {
+    console.log('[Sidebar] handlePickFolder clicked');
     setIsCreating(true);
-    const selectedPath = await selectFolder();
-    if (selectedPath) {
-      // Extract the folder name for the workspace name
-      const folderName = selectedPath.split('/').filter(Boolean).pop() || 'Untitled';
-      try {
-        await createWs(folderName, selectedPath);
-      } catch (error) {
-        console.error('Failed to create workspace:', error);
+    try {
+      const selectedPath = await selectFolder();
+      console.log('[Sidebar] selectFolder returned:', selectedPath);
+      if (selectedPath) {
+        // Extract the folder name for the workspace name
+        const folderName = selectedPath.split('/').filter(Boolean).pop() || 'Untitled';
+        console.log('[Sidebar] Creating workspace with name:', folderName, 'path:', selectedPath);
+        try {
+          await createWs(folderName, selectedPath);
+          console.log('[Sidebar] Workspace created successfully');
+        } catch (error) {
+          console.error('Failed to create workspace:', error);
+        }
+      } else {
+        console.log('[Sidebar] User cancelled folder selection');
       }
+    } catch (error) {
+      console.error('[Sidebar] Error in handlePickFolder:', error);
     }
     setIsCreating(false);
   };
@@ -89,6 +142,9 @@ export function Sidebar({ workspaces = [], activeId = '', setMainView, currentVi
       <div style={{
         padding: '16px',
         borderBottom: `1px solid ${theme.colors.border}`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <img
@@ -109,6 +165,37 @@ export function Sidebar({ workspaces = [], activeId = '', setMainView, currentVi
             <div style={{ fontSize: '10px', color: theme.colors.textMuted }}>Developer Workflow Orchestrator</div>
           </div>
         </div>
+        {setSidebarOpen && (
+          <button
+            onClick={() => setSidebarOpen(false)}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '4px',
+              color: theme.colors.textMuted,
+              transition: 'color 0.15s, background 0.15s',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.color = theme.colors.text;
+              e.currentTarget.style.background = theme.colors.bgTertiary;
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.color = theme.colors.textMuted;
+              e.currentTarget.style.background = 'none';
+            }}
+            title="Close sidebar"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              <line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* Navigation */}
@@ -139,7 +226,9 @@ export function Sidebar({ workspaces = [], activeId = '', setMainView, currentVi
                 if (localView !== view.id) e.currentTarget.style.background = 'transparent';
               }}
             >
-              <span style={{ fontSize: '14px' }}>{view.icon}</span>
+              <span style={{ display: 'flex', flexShrink: 0, width: '16px', height: '16px' }}>
+                {view.icon(localView === view.id ? theme.colors.text : theme.colors.textMuted)}
+              </span>
               <span>{view.label}</span>
             </button>
           ))}
@@ -248,6 +337,39 @@ export function Sidebar({ workspaces = [], activeId = '', setMainView, currentVi
               )}
             </button>
           ))}
+        </div>
+
+        {/* Terminal button - positioned below workspace list */}
+        <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: `1px solid ${theme.colors.border}` }}>
+          {onCreateTerminal && (
+            <button
+              onClick={onCreateTerminal}
+              style={{
+                width: '100%',
+                background: theme.colors.accent,
+                color: '#fff',
+                border: 'none',
+                borderRadius: '4px',
+                padding: '6px 12px',
+                fontSize: '12px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                transition: 'opacity 0.15s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
+              onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <rect x="1" y="1" width="10" height="8" rx="1" stroke="currentColor" strokeWidth="1.2" />
+                <polyline points="3,5 5,7 9,3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              + Terminal
+            </button>
+          )}
         </div>
       </div>
 

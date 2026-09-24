@@ -1,61 +1,60 @@
 'use client';
 
-import { createContext, useContext, useState, ReactNode } from 'react';
-
-// Design tokens
-export const theme = {
-  colors: {
-    bg: '#0a0a0a',
-    bgSecondary: '#111111',
-    bgTertiary: '#1a1a1a',
-    text: '#e8e8e8',
-    textMuted: '#888888',
-    accent: '#4a9eff',
-    accentHover: '#6ab0ff',
-    border: '#2a2a2a',
-    success: '#4ade80',
-    warning: '#fbbf24',
-    error: '#f87171',
-  },
-  fonts: {
-    monospace: '"JetBrains Mono", "Fira Code", "Consolas", monospace',
-    sans: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-  },
-  spacing: {
-    xs: '4px',
-    sm: '8px',
-    md: '16px',
-    lg: '24px',
-    xl: '32px',
-  },
-  borderRadius: {
-    sm: '4px',
-    md: '8px',
-    lg: '12px',
-  },
-};
-
-export type Theme = typeof theme;
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { themes, type ThemeKey, type ThemeTokens } from '@/lib/themes';
 
 interface ThemeContextType {
-  theme: Theme;
+  theme: ThemeTokens;
+  setTheme: (key: ThemeKey) => void;
+  currentThemeKey: ThemeKey;
 }
 
 const ThemeContext = createContext<ThemeContextType | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [themeState] = useState<Theme>(theme);
+  const [currentThemeKey, setCurrentThemeKey] = useState<ThemeKey>(() => {
+    try {
+      const saved = localStorage.getItem('dwo-theme');
+      if (saved && saved in themes) return saved as ThemeKey;
+    } catch {}
+    return 'dark';
+  });
+
+  const theme = themes[currentThemeKey];
+
+  // Apply CSS custom properties to :root whenever theme changes
+  useEffect(() => {
+    const root = document.documentElement;
+    for (const [name, value] of Object.entries(theme.colors)) {
+      root.style.setProperty(`--dwo-color-${name}`, value);
+    }
+    root.style.setProperty('--dwo-font-mono', theme.fonts.monospace);
+    root.style.setProperty('--dwo-font-sans', theme.fonts.sans);
+    for (const [name, value] of Object.entries(theme.spacing)) {
+      root.style.setProperty(`--dwo-space-${name}`, value);
+    }
+    for (const [name, value] of Object.entries(theme.borderRadius)) {
+      root.style.setProperty(`--dwo-radius-${name}`, value);
+    }
+    root.setAttribute('data-theme', currentThemeKey);
+  }, [theme, currentThemeKey]);
+
+  const setTheme = (key: ThemeKey) => {
+    setCurrentThemeKey(key);
+    try {
+      localStorage.setItem('dwo-theme', key);
+    } catch {}
+  };
+
   return (
-    <ThemeContext.Provider value={{ theme: themeState }}>
+    <ThemeContext.Provider value={{ theme, setTheme, currentThemeKey }}>
       {children}
     </ThemeContext.Provider>
   );
 }
 
-export function useTheme() {
-  const context = useContext(ThemeContext);
-  if (!context) {
-    throw new Error('useTheme must be used within ThemeProvider');
-  }
-  return context;
+export function useTheme(): ThemeContextType {
+  const ctx = useContext(ThemeContext);
+  if (!ctx) throw new Error('useTheme must be used within ThemeProvider');
+  return ctx;
 }

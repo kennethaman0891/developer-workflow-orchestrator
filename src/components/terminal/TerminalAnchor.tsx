@@ -6,6 +6,7 @@ import type { FitAddon } from 'xterm-addon-fit';
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import 'xterm/css/xterm.css';
+import { useSettings } from '@/contexts/SettingsContext';
 
 interface TerminalAnchorProps {
   sessionId?: string;
@@ -22,14 +23,26 @@ export function TerminalAnchor({ sessionId, className = '' }: TerminalAnchorProp
   const canWriteRef = useRef(false); // guards against writes before init completes
   sessionIdRef.current = sessionId;
 
-  useEffect(() => {
-    if (!terminalRef.current) return;
+  const { transparency, fontSize } = useSettings();
 
+  // Compute background alpha from the global transparency setting (0-100).
+  // transparency=0 → opaque, transparency=100 → fully transparent.
+  const bgAlpha = Math.max(0, 1 - transparency / 100);
+  const bgRgba = `rgba(10, 10, 10, ${bgAlpha})`;
+
+  // Shared initializer — runs once per sessionId.
+  // Uses a ref to avoid recreating the terminal on every render.
+  const initRef = useRef(false);
+
+  useEffect(() => {
+    if (!terminalRef.current || initRef.current) return;
+    initRef.current = true;
     disposedRef.current = false;
 
     let unlistenOutput: UnlistenFn | null = null;
     let unlistenResizeCleanup: (() => void) | null = null;
     let writeChain = Promise.resolve();
+    let fitRaf = 0;
 
     // Dynamic imports to avoid SSR issues
     import('xterm').then(async (xtermModule) => {
@@ -40,9 +53,9 @@ export function TerminalAnchor({ sessionId, className = '' }: TerminalAnchorProp
       const term = new Terminal({
         cursorBlink: true,
         fontFamily: '"JetBrains Mono", "Fira Code", "Consolas", monospace',
-        fontSize: 14,
+        fontSize: fontSize,
         theme: {
-          background: '#0a0a0a',
+          background: bgRgba,
           foreground: '#e8e8e8',
           cursor: '#4a9eff',
           selectionBackground: '#4a9eff33',
@@ -70,16 +83,31 @@ export function TerminalAnchor({ sessionId, className = '' }: TerminalAnchorProp
       fitAddonRef.current = fitAddon;
       canWriteRef.current = true; // terminal is now ready to accept input
 
-      // Resize the xterm viewport with its container
-      // Observe the outer containerRef (which has actual size constraints from
-      // the grid cell) rather than the inner terminalRef (which uses 100%).
-      let fitRaf = 0;
+      // Apply transparency as CSS opacity on the outer container so the page
+      // background shows through the terminal viewport.
+      if (transparency > 0 && containerRef.current) {
+        const blendFactor = (100 - transparency) / 100;
+        containerRef.current.style.mixBlendMode = 'normal';
+        const xtermEl = terminalRef.current?.querySelector('.xterm-screen');
+        if (xtermEl) {
+          (xtermEl as HTMLElement).style.opacity = String(blendFactor);
+        }
+      }
+
+      // ── ResizeObserver on the OUTER containerRef ────────────────────────
+      // The outer container has actual size constraints from the grid/flex
+      // parent. The inner terminalRef uses 100% width/height so it inherits
+      // whatever size the outer container gets.
       const resizeObserver = new ResizeObserver(() => {
-        // Debounce via requestAnimationFrame so rapid resize drags don't
-        // cause an xterm.js re-render storm.
         cancelAnimationFrame(fitRaf);
         fitRaf = requestAnimationFrame(() => {
-          if (!disposedRef.current) fitAddon.fit();
+          if (!disposedRef.current) {
+            // Safety: only fit if container has non-zero dimensions
+            const rect = containerRef.current?.getBoundingClientRect();
+            if (rect && rect.width > 0 && rect.height > 0) {
+              fitAddon.fit();
+            }
+          }
         });
       });
       resizeObserver.observe(containerRef.current!);
@@ -142,7 +170,58 @@ export function TerminalAnchor({ sessionId, className = '' }: TerminalAnchorProp
       fitAddonRef.current = null;
       term?.dispose();
     };
+  }, [sessionId]); // Only rebuild terminal on session change
+
+  // ── Retry fit if container was 0×0 on first render ────────────────────────
+  // This handles the case where the terminal mounts before its parent has
+  // computed its final layout (common in split views and modals).
+  useEffect(() => {
+    if (!containerRef.current || !fitAddonRef.current) return;
+
+    const retryFit = () => {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (rect && rect.width > 0 && rect.height > 0) {
+        fitAddonRef.current?.fit();
+      } else {
+        // Container still 0×0 — retry after a short delay
+        setTimeout(retryFit, 50);
+      }
+    };
+
+    // Initial retry after paint
+    const timer = setTimeout(retryFit, 100);
+    return () => clearTimeout(timer);
   }, [sessionId]);
+
+  // Reactively update transparency and font-size without tearing down the
+  // terminal instance. Runs on every settings change after initial mount.
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term || disposedRef.current) return;
+
+    // Update background colour with new alpha
+    const newAlpha = Math.max(0, 1 - transparency / 100);
+    const newBgRgba = `rgba(10, 10, 10, ${newAlpha})`;
+    try {
+      (term as unknown as { options: { theme: Record<string, string> } }).options.theme.background = newBgRgba;
+    } catch {
+      const xtermEl = terminalRef.current?.querySelector('.xterm-screen') as HTMLElement | null;
+      if (xtermEl) xtermEl.style.opacity = String(newAlpha);
+    }
+
+    // Update font size
+    try {
+      (term as unknown as { options: { fontSize: number } }).options.fontSize = fontSize;
+    } catch {}
+    try {
+      fitAddonRef.current?.fit();
+    } catch {}
+
+    // Update canvas-layer opacity
+    const blendFactor = (100 - transparency) / 100;
+    const xtermEl = terminalRef.current?.querySelector('.xterm-screen') as HTMLElement | null;
+    if (xtermEl) xtermEl.style.opacity = String(blendFactor);
+  }, [transparency, fontSize]);
 
   // Ensure terminal stays focused
   useEffect(() => {
@@ -154,9 +233,6 @@ export function TerminalAnchor({ sessionId, className = '' }: TerminalAnchorProp
     };
 
     const handleClick = () => {
-      // Re-focus xterm when the user clicks anywhere in the terminal area.
-      // Do NOT call stopPropagation — that would break xterm's internal
-      // text-selection and cursor-positioning handlers.
       termRef.current?.focus();
     };
 
@@ -164,9 +240,6 @@ export function TerminalAnchor({ sessionId, className = '' }: TerminalAnchorProp
     container.addEventListener('click', handleClick);
     container.addEventListener('mousedown', handleClick);
 
-    // Handle Ctrl+V / Cmd+V paste via the paste event's built-in clipboard data.
-    // Using e.clipboardData is synchronous and works reliably in WKWebView,
-    // unlike navigator.clipboard.readText() which requires permissions and may fail.
     const handlePaste = (e: ClipboardEvent) => {
       if (!termRef.current) return;
       const text = e.clipboardData?.getData('text/plain');

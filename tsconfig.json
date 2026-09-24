@@ -9,8 +9,6 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
@@ -23,11 +21,9 @@
     "resolveJsonModule": true,
     "forceConsistentCasingInFileNames": true,
     "jsx": "preserve",
-    "composite": true,
-    "declaration": true,
     "allowJs": true,
     "noEmit": true,
-    "incremental": true,
+    "incremental": false,
     "isolatedModules": true,
     "plugins": [
       {

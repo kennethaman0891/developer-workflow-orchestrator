@@ -16,6 +16,7 @@
 
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { TerminalAnchor } from './TerminalAnchor';
+import { useSettings } from '@/contexts/SettingsContext';
 
 export interface PanelProps {
   id: string;
@@ -46,6 +47,13 @@ export function TerminalPanel({
   gridCols = 1,
   gridRows = 1,
 }: PanelProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [resizeStart, setResizeStart] = useState<{ x: number; y: number; spanCol: number; spanRow: number } | null>(null);
+  const [currentSpan, setCurrentSpan] = useState<{ spanCol: number; spanRow: number } | null>(null);
+
+  // Pull transparency from global settings so every terminal respects the user's choice
+  const { transparency } = useSettings();
+
   // ── Resize handle (updates grid spans, not CSS dimensions) ──────────────
 
   const handleResizeStart = useCallback(
@@ -94,9 +102,11 @@ export function TerminalPanel({
     };
   }, [resizeStart, onResize, gridContainerRef, gridCols, gridRows, currentSpan]);
 
-  const bgColor = isActive ? '#1a1a2e' : '#0d0d0d';
+  // Convert 0-100 transparency to alpha: 0 → fully opaque, 100 → fully transparent
+  const bgAlpha = Math.max(0, 1 - transparency / 100);
+  const bgColor = isActive ? `rgba(26, 26, 46, ${bgAlpha})` : `rgba(13, 13, 13, ${bgAlpha})`;
   const borderColor = isActive ? '#4a9eff' : '#2a2a2a';
-  const headerBg = isActive ? '#151525' : '#111111';
+  const headerBg = isActive ? `rgba(21, 21, 37, ${bgAlpha})` : `rgba(17, 17, 17, ${bgAlpha})`;
 
   return (
     <div
@@ -111,7 +121,7 @@ export function TerminalPanel({
         overflow: 'hidden',
         background: bgColor,
         cursor: 'default',
-        transition: 'border-color 0.15s, box-shadow 0.15s',
+        transition: 'border-color 0.15s, box-shadow 0.15s, background 0.2s',
         boxShadow: isActive ? '0 0 0 1px #4a9eff44, 0 4px 12px rgba(0,0,0,0.4)' : 'none',
         position: 'relative',
         minWidth: 0,
@@ -129,7 +139,7 @@ export function TerminalPanel({
           justifyContent: 'space-between',
           padding: '6px 10px',
           background: headerBg,
-          borderBottom: '1px solid #2a2a2a',
+          borderBottom: `1px solid ${borderColor}`,
           cursor: 'pointer',
           userSelect: 'none',
           flexShrink: '0',

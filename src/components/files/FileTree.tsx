@@ -15,6 +15,7 @@ export function FileTree({ onFileSelect }: FileTreeProps) {
   const [newItemName, setNewItemName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [createType, setCreateType] = useState<'file' | 'dir'>('file');
+  const [selectedPath, setSelectedPath] = useState<string | null>(null);
 
   const toggleDir = (path: string) => {
     setExpandedDirs(prev => {
@@ -28,11 +29,15 @@ export function FileTree({ onFileSelect }: FileTreeProps) {
     });
   };
 
-  const handleDoubleClick = async (entry: FsEntry) => {
+  const handleClick = async (entry: FsEntry) => {
+    setSelectedPath(entry.path);
+
+    // Double-check: only treat as file if explicitly not a directory
     if (entry.is_dir) {
       toggleDir(entry.path);
       await list(entry.path);
     } else {
+      console.log('[FileTree] Selecting file:', entry.path, '(is_dir:', entry.is_dir, ')');
       onFileSelect?.(entry.path);
     }
   };
@@ -84,6 +89,17 @@ export function FileTree({ onFileSelect }: FileTreeProps) {
         fontFamily: 'monospace',
       }}>
         {currentPath}
+      </div>
+
+      {/* Help text */}
+      <div style={{
+        padding: '4px 8px',
+        fontSize: '10px',
+        color: theme.colors.textMuted,
+        borderBottom: `1px solid ${theme.colors.border}`,
+        fontStyle: 'italic',
+      }}>
+        Click a file to open • Click a folder to navigate
       </div>
 
       {/* Create button */}
@@ -142,7 +158,7 @@ export function FileTree({ onFileSelect }: FileTreeProps) {
           entries.map(entry => (
             <div
               key={entry.path}
-              onDoubleClick={() => handleDoubleClick(entry)}
+              onClick={() => handleClick(entry)}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -151,11 +167,19 @@ export function FileTree({ onFileSelect }: FileTreeProps) {
                 cursor: 'pointer',
                 fontSize: '11px',
                 color: entry.is_dir ? theme.colors.accent : theme.colors.text,
-                background: 'transparent',
+                background: selectedPath === entry.path ? theme.colors.bgTertiary : 'transparent',
                 transition: 'background 0.1s',
               }}
-              onMouseEnter={e => (e.currentTarget.style.background = theme.colors.bgTertiary)}
-              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+              onMouseEnter={e => {
+                if (selectedPath !== entry.path) {
+                  e.currentTarget.style.background = theme.colors.bgTertiary;
+                }
+              }}
+              onMouseLeave={e => {
+                if (selectedPath !== entry.path) {
+                  e.currentTarget.style.background = 'transparent';
+                }
+              }}
             >
               <span style={{ fontSize: '12px' }}>
                 {entry.is_dir ? (expandedDirs.has(entry.path) ? '📂' : '📁') : '📄'}

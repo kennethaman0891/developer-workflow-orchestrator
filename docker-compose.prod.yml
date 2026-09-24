@@ -1,0 +1,54 @@
+# ─── Docker Compose — Production with external API backend ────────────────────
+#
+# Full-stack deployment: nginx frontend + separate Tauri-compatible API proxy.
+# Use this when you've deployed a companion Rust API server alongside DWO.
+#
+# Usage:
+#   docker compose -f docker-compose.prod.yml up -d
+#   docker compose -f docker-compose.prod.yml ps
+
+
+services:
+  dwo-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    image: dwo:web
+    ports:
+      - "${DWO_PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=production
+      - DWO_API_URL=http://dwo-api:8080   # points nginx proxy to backend
+    depends_on:
+      dwo-api:
+        condition: service_healthy
+    volumes:
+      - dwo-data:/data
+    restart: unless-stopped
+
+  dwo-api:
+    # Placeholder for a future Rust API server image.
+    # Replace with your actual backend image when ready.
+    image: ghcr.io/kennethaman/dwo-api:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - RUST_LOG=info
+      - DWO_DATA_DIR=/data
+      - NODE_ENV=production
+    volumes:
+      - dwo-api-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  dwo-data:
+    name: dwo-web-data
+  dwo-api-data:
+    name: dwo-api-data

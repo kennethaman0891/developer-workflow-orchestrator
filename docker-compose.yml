@@ -1,0 +1,38 @@
+# ─── Docker Compose — Web Mode (production, browser-only) ─────────────────────
+#
+# Run the full DWO UI in your browser. Terminal emulation is limited compared
+# to the native app but the editor, file browser, and settings panels work fine.
+#
+# Usage:
+#   docker compose up -d          # start in background
+#   docker compose logs -f dwo    # follow logs
+#   docker compose down           # stop
+#
+# Open http://localhost:3000
+
+
+services:
+  dwo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    image: dwo:latest
+    ports:
+      - "${DWO_PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=production
+    volumes:
+      # Persist user data across reboots
+      - dwo-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/index.html"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  dwo-data:
+    name: dwo-data

@@ -1,0 +1,30 @@
+# ─── DWO Development Dockerfile ───────────────────────────────────────────────
+#
+# Hot-reload enabled. Mount source into the container so changes reflect
+# immediately in the browser without rebuilding the image.
+#
+# Usage:
+#   docker compose -f docker-compose.dev.yml up
+#   docker build -f Dockerfile.dev -t dwo:dev .
+#
+# Notes:
+#   - The container maps port 3000 → 3000
+#   - Source volumes are mounted so you can edit locally and see changes
+#   - node_modules and .next are hidden from the host via volume overrides
+
+FROM node:20-alpine
+WORKDIR /app
+
+# Copy dependency manifests first (Docker layer caching)
+COPY package.json package-lock.json ./
+RUN npm ci --prefer-offline --no-audit --no-fund
+
+# Copy source (mounted as volume in dev compose, but needed for build cache)
+COPY . .
+
+EXPOSE 3000
+
+ENV NODE_ENV=development
+ENV TAURI_DEV_PORT=3000
+
+CMD ["npm", "run", "dev"]

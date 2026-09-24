@@ -98,6 +98,8 @@ pub fn run() {
             state::commands::load_workspace_state,
             state::commands::save_workspace_state,
             state::commands::list_workspaces,
+            state::commands::activate_workspace,
+            state::commands::select_workspace_folder,
             // License commands (Phase 3)
             license::commands::activate,
             license::commands::status,
