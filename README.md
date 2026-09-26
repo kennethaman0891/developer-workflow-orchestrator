@@ -7,7 +7,7 @@
 **A powerful desktop application for managing developer workflows with multi-agent terminal orchestration.**
 
 [![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)](#)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](LICENSE-MIT)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey.svg)](#)
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](#)
 [![Tauri](https://img.shields.io/badge/Tauri-2.0-24C8D8?logo=tauri)](#)
@@ -159,12 +159,17 @@ Edit `src-tauri/tauri.conf.json` to customize:
 
 ## 📄 License
 
-DWO operates under a tiered licensing model:
+DWO is dual-licensed under **either**:
+
+- **MIT License** — see [LICENSE-MIT](LICENSE-MIT)
+- **Apache License, Version 2.0** — see [LICENSE-APACHE](LICENSE-APACHE)
+
+You may choose which license to use, at your option.
+
+The application additionally operates under a tiered functional model:
 
 - **Free Tier**: 4 terminals, 2 workspaces
 - **Pro Tier**: 10 terminals, 50 workspaces
-
-See the [LICENSE](LICENSE) file for complete terms and conditions.
 
 ## 🤝 Contributing
 
