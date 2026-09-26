@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { CodeEditor } from '@/components/editor/CodeEditor';
+import { MonacoEditor, disposeEditorModel } from '@/components/editor/MonacoEditor';
 import { FileBrowser } from '@/components/ide/FileBrowser';
 import { TabBar, type Tab } from '@/components/ide/TabBar';
 import { useOpenFiles } from '@/hooks/useOpenFiles';
@@ -14,35 +14,64 @@ interface IDEViewProps {
 
 type FileCategory = 'code' | 'image' | 'pdf' | 'other';
 
+/** Image types we can preview inline. */
+const IMAGE_EXTS = new Set([
+  'png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp', 'ico', 'avif', 'tiff',
+]);
+
 /**
- * Determine file category based on extension
+ * Known binary / media formats.
+ *
+ * This is a *denylist*, not an allowlist. The previous implementation listed
+ * every text extension it could think of, which meant any language Monaco
+ * supported but the list did not (and any file with no extension at all) was
+ * rejected with "Cannot preview this file type". Inverting the check means a new
+ * language works the day Monaco gains it.
+ *
+ * More importantly: `read_file` decodes with `read_to_string`, which fails on
+ * non-UTF-8 bytes. Classifying binaries explicitly is what keeps them out of the
+ * editor rather than surfacing a decoder error.
+ */
+const BINARY_EXTS = new Set([
+  // Archives
+  'zip', 'gz', 'tgz', 'bz2', 'xz', 'zst', '7z', 'rar', 'tar', 'jar', 'war', 'iso',
+  // Executables & libraries
+  'exe', 'dll', 'so', 'dylib', 'a', 'o', 'obj', 'lib', 'bin', 'app', 'msi', 'deb', 'rpm',
+  'pyc', 'pyo', 'class', 'wasm', 'node',
+  // Documents
+  'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'pages', 'numbers', 'key',
+  // Audio / video
+  'mp3', 'mp4', 'm4a', 'm4v', 'wav', 'flac', 'ogg', 'oga', 'aac', 'avi', 'mov',
+  'mkv', 'webm', 'wmv', 'flv',
+  // Fonts
+  'ttf', 'otf', 'woff', 'woff2', 'eot',
+  // Data / databases
+  'db', 'sqlite', 'sqlite3', 'mdb', 'parquet', 'feather',
+  // Misc binary
+  'pem', 'key', 'p12', 'pfx', 'icns', 'db-shm', 'db-wal', 'log',
+]);
+
+/**
+ * Determine how to render a file.
+ *
+ * Extensionless files (e.g. `Makefile`, `Dockerfile`, `.env`) are treated as
+ * text and handed to Monaco, which resolves their language from its own
+ * filename table.
  */
 function getFileCategory(path: string): FileCategory {
-  const ext = path.split('.').pop()?.toLowerCase();
-  if (!ext) return 'other';
+  const normalized = path.replace(/\\/g, '/');
+  const filename = normalized.slice(normalized.lastIndexOf('/') + 1);
 
-  const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'bmp', 'ico'];
-  if (imageExts.includes(ext)) return 'image';
+  const dot = filename.lastIndexOf('.');
+  if (dot <= 0) return 'code'; // dotfile or extensionless text file
+
+  const ext = filename.slice(dot + 1).toLowerCase();
+
+  if (IMAGE_EXTS.has(ext)) return 'image';
   if (ext === 'pdf') return 'pdf';
+  if (BINARY_EXTS.has(ext)) return 'other';
 
-  const codeExts = [
-    'ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs',
-    'py', 'rs', 'go', 'java', 'c', 'cpp', 'h', 'hpp',
-    'rb', 'php', 'swift', 'kt', 'scala',
-    'json', 'jsonc', 'yaml', 'yml', 'toml', 'ini', 'cfg', 'conf',
-    'md', 'markdown', 'txt', 'text',
-    'html', 'htm', 'xhtml',
-    'css', 'scss', 'less', 'sass',
-    'xml', 'plist', 'svg',
-    'sh', 'bash', 'zsh', 'fish',
-    'env', 'gitignore', 'dockerignore',
-    'sql', 'graphql', 'gql',
-    'vue', 'svelte',
-    'lua', 'r', 'R', 'julia',
-  ];
-  if (codeExts.includes(ext)) return 'code';
-
-  return 'other';
+  return 'code';
 }
 
 /**
@@ -51,11 +80,13 @@ function getFileCategory(path: string): FileCategory {
 function FileViewer({
   filePath,
   content,
+  onChange,
   onSave,
   category,
 }: {
   filePath: string;
   content: string;
+  onChange?: (path: string, content: string) => void;
   onSave?: (path: string, content: string) => void;
   category: FileCategory;
 }) {
@@ -151,11 +182,12 @@ function FileViewer({
     );
   }
 
-  // Code/text file - use CodeEditor
+  // Code/text file - Monaco handles syntax, completion and folding itself.
   return (
-    <CodeEditor
+    <MonacoEditor
       filePath={filePath}
       content={content}
+      onChange={onChange}
       onSave={onSave}
     />
   );
@@ -168,7 +200,7 @@ export function IDEView({ initialPath }: IDEViewProps) {
     addFile,
     closeFile,
     saveFile,
-    markDirty,
+    updateContent,
     setActiveFilePath,
   } = useOpenFiles();
 
@@ -212,6 +244,8 @@ export function IDEView({ initialPath }: IDEViewProps) {
       }
     }
     closeFile(path);
+    // Release the cached Monaco model so a later reopen re-reads from disk.
+    disposeEditorModel(path);
   }, [openFiles, saveFile, closeFile]);
 
   // Build tabs array
@@ -423,7 +457,8 @@ export function IDEView({ initialPath }: IDEViewProps) {
             <FileViewer
               filePath={activeFile.path}
               content={activeFile.content}
-              onSave={(path, content) => saveFile(path, content)}
+              onChange={(path, next) => updateContent(path, next)}
+              onSave={(path, next) => saveFile(path, next)}
               category={getFileCategory(activeFile.path)}
             />
           ) : (

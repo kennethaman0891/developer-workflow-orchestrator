@@ -17,6 +17,12 @@ export interface UseOpenFilesReturn {
   closeFile: (path: string) => void;
   saveFile: (path: string, content: string) => Promise<void>;
   markDirty: (path: string) => void;
+  /**
+   * Record an edit from the editor: stores the new buffer *and* flags the file
+   * as dirty. Both are required — storing content alone would silently drop
+   * edits on close, and flagging dirty alone would save a stale buffer.
+   */
+  updateContent: (path: string, content: string) => void;
   setActiveFilePath: (path: string | null) => void;
 }
 
@@ -92,6 +98,20 @@ export function useOpenFiles(): UseOpenFilesReturn {
     });
   }, []);
 
+  /** Record an edit: update the buffer and mark the file dirty in one write. */
+  const updateContent = useCallback((path: string, content: string) => {
+    setOpenFiles(prev => {
+      const file = prev.get(path);
+      if (!file || file.content === content) {
+        // Unknown file, or an echo of what we already hold — skip the re-render.
+        return prev;
+      }
+      const next = new Map(prev);
+      next.set(path, { ...file, content, dirty: true });
+      return next;
+    });
+  }, []);
+
   return {
     openFiles,
     activeFilePath,
@@ -99,6 +119,7 @@ export function useOpenFiles(): UseOpenFilesReturn {
     closeFile,
     saveFile,
     markDirty,
+    updateContent,
     setActiveFilePath,
   };
 }
