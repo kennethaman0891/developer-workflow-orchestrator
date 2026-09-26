@@ -13,7 +13,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useWorkspaces } from '@/hooks/useWorkspaces';
+import { useWorkspaces } from '@/contexts/WorkspacesContext';
 import { selectFolder, WORKSPACE_COLORS, type WorkspaceTemplate } from '@/lib/workspace';
 
 const TEMPLATE_OPTIONS: WorkspaceTemplate[] = [1, 2, 4, 6, 8, 10, 12, 14, 16];

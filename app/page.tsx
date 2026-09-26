@@ -9,7 +9,8 @@ import { CollaborationPanel } from '@/components/collaboration/CollaborationPane
 import { SettingsPanel } from '@/components/settings/SettingsPanel';
 import { ErrorReporter } from '@/components/diagnostics/ErrorReporter';
 import { IDEView } from '@/views/ide/IDEView';
-import { useWorkspaces } from '@/hooks/useWorkspaces';
+import { useWorkspaces } from '@/contexts/WorkspacesContext';
+import { WorkspacesProvider } from '@/contexts/WorkspacesContext';
 import { SettingsProvider } from '@/contexts/SettingsContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { WizardView } from '@/components/workspace/WizardView';
@@ -31,11 +32,36 @@ function AppShell() {
     getLaunchCwd,
     activate: activateWs,
     load: loadWorkspaces,
+    close: closeWs,
   } = useWorkspaces();
   const { sessions, create: createTerminal, close: closeTerminal, list: listTerminals } = useTerminals();
 
   // Get the active workspace object
   const activeWorkspace = activeId ? workspaces.find(w => w.id === activeId) : null;
+
+  // ── Workspace close with terminal cleanup ────────────────────────────────────
+  const handleCloseWorkspace = useCallback(async (id: string) => {
+    // Close all terminals bound to this workspace
+    const current = await listTerminals();
+    const boundSessions = current.filter(s => s.workspace_id === id);
+    await Promise.all(boundSessions.map(s => closeTerminal(s.id)));
+
+    // Remove from deleted-set so it can be recreated later
+    createdForRef.current.delete(id);
+
+    // Delete the workspace itself
+    await closeWs(id);
+
+    // If we just deleted the active workspace, create a fresh default
+    if (activeId === id) {
+      const remaining = workspaces.filter(w => w.id !== id);
+      if (remaining.length === 0) {
+        await createWs('Workspace');
+      } else {
+        await activateWs(remaining[0].id);
+      }
+    }
+  }, [closeWs, createWs, activateWs, activeId, workspaces, listTerminals, closeTerminal]);
 
   // ── Terminal creation for the active workspace ─────────────────────────────
   // Creates a terminal bound to the workspace's project path + id.
@@ -147,6 +173,8 @@ function AppShell() {
             currentView={mainView}
             onCreateTerminal={createTerminalForWorkspace}
             onOpenWizard={() => setShowWizard(true)}
+            onCloseWorkspace={handleCloseWorkspace}
+            onActivateWorkspace={activateWs}
           />
         )}
 
@@ -155,36 +183,39 @@ function AppShell() {
           <button
             onClick={() => setSidebarOpen(true)}
             style={{
-              width: '24px',
-              height: '48px',
+              width: '28px',
+              height: '52px',
               background: 'var(--dwo-color-bg-secondary, #111111)',
               border: 'none',
               borderLeft: '1px solid var(--dwo-color-border, #2a2a2a)',
               borderRight: '1px solid var(--dwo-color-border, #2a2a2a)',
-              borderRadius: '0 6px 6px 0',
+              borderRadius: '0 8px 8px 0',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               color: 'var(--dwo-color-text-muted, #888888)',
-              transition: 'background 0.15s, color 0.15s',
+              transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
               position: 'relative',
               zIndex: 10,
+              boxShadow: '2px 0 8px rgba(0,0,0,0.3)',
             }}
             onMouseEnter={e => {
               e.currentTarget.style.background = 'var(--dwo-color-bg-tertiary, #1a1a1a)';
               e.currentTarget.style.color = 'var(--dwo-color-text, #e8e8e8)';
+              e.currentTarget.style.width = '32px';
             }}
             onMouseLeave={e => {
               e.currentTarget.style.background = 'var(--dwo-color-bg-secondary, #111111)';
               e.currentTarget.style.color = 'var(--dwo-color-text-muted, #888888)';
+              e.currentTarget.style.width = '28px';
             }}
             title="Open sidebar"
           >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <line x1="2" y1="3" x2="12" y2="3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              <line x1="2" y1="7" x2="12" y2="7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              <line x1="2" y1="11" x2="12" y2="11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="2" y="3" width="12" height="1.5" rx="0.75" fill="currentColor" />
+              <rect x="2" y="7.25" width="12" height="1.5" rx="0.75" fill="currentColor" />
+              <rect x="2" y="11" width="12" height="1.5" rx="0.75" fill="currentColor" />
             </svg>
           </button>
         )}
@@ -198,7 +229,15 @@ function AppShell() {
           minWidth: 0,
         }}>
           {/* Phase 1: Projects View */}
-          {mainView === 'projects' && <ProjectsView />}
+          {mainView === 'projects' && (
+            <ProjectsView
+              onContinue={(id) => {
+                activateWs(id);
+                setMainView('workspace');
+              }}
+              onDeleteWorkspace={handleCloseWorkspace}
+            />
+          )}
 
           {/* Phase 10: Collaboration View */}
           {mainView === 'collaboration' && <CollaborationPanel />}
@@ -224,9 +263,7 @@ function AppShell() {
 
           {/* Phase 7: IDE View */}
           {mainView === 'ide' && (
-            <IDEView
-              activeWorkspace={activeWorkspace || undefined}
-            />
+            <IDEView initialPath={activeWorkspace?.path || undefined} />
           )}
         </main>
       </div>
@@ -238,7 +275,9 @@ export default function Home() {
   return (
     <ThemeProvider>
       <SettingsProvider>
-        <AppShell />
+        <WorkspacesProvider>
+          <AppShell />
+        </WorkspacesProvider>
       </SettingsProvider>
     </ThemeProvider>
   );

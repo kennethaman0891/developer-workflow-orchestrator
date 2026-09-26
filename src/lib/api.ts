@@ -62,3 +62,10 @@ export async function deleteFile(path: string): Promise<void> {
 export async function searchFiles(pattern: string, path?: string): Promise<string[]> {
   return invoke<string[]>('search', { pattern, path });
 }
+
+/**
+ * Open system folder picker dialog and return selected path
+ */
+export async function pickFolder(): Promise<string | null> {
+  return invoke<string | null>('select_workspace_folder');
+}

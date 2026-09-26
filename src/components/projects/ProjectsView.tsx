@@ -2,7 +2,13 @@
 
 import { useState } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useWorkspaces } from '@/hooks/useWorkspaces';
+import { useWorkspaces } from '@/contexts/WorkspacesContext';
+import { type Workspace } from '@/lib/workspace';
+
+interface ProjectsViewProps {
+  onContinue?: (id: string) => void;
+  onDeleteWorkspace?: (id: string) => void;
+}
 
 interface ProjectCardProps {
   title: string;
@@ -38,9 +44,190 @@ function ProjectCard({ title, description, icon, onClick }: ProjectCardProps) {
   );
 }
 
-export function ProjectsView() {
+function WorkspaceCard({
+  ws,
+  isActive,
+  onContinue,
+  onDelete,
+}: {
+  ws: Workspace;
+  isActive: boolean;
+  onContinue?: () => void;
+  onDelete?: () => void;
+}) {
   const { theme } = useTheme();
-  const { workspaces, create } = useWorkspaces();
+  const [hovered, setHovered] = useState(false);
+
+  const pathDisplay = ws.path
+    ? ws.path.split('/').filter(Boolean).slice(-2).join('/')
+    : 'No project folder';
+
+  return (
+    <div
+      style={{
+        position: 'relative',
+        background: theme.colors.bgSecondary,
+        border: `1px solid ${isActive ? theme.colors.accent : theme.colors.border}`,
+        borderRadius: '8px',
+        padding: '16px',
+        transition: 'all 0.2s',
+        cursor: 'default',
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {/* Active indicator bar */}
+      {isActive && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: '2px',
+            background: theme.colors.accent,
+            borderRadius: '8px 8px 0 0',
+          }}
+        />
+      )}
+
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+        {/* Color dot */}
+        {ws.color && (
+          <span
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              background: ws.color,
+              flexShrink: 0,
+              marginTop: '6px',
+              opacity: 0.9,
+            }}
+          />
+        )}
+
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {/* Name */}
+          <div
+            style={{
+              fontSize: '13px',
+              fontWeight: isActive ? 600 : 500,
+              color: theme.colors.text,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {ws.name}
+          </div>
+
+          {/* Path */}
+          <div
+            style={{
+              fontSize: '11px',
+              color: theme.colors.textMuted,
+              fontFamily: 'monospace',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              marginTop: '2px',
+            }}
+          >
+            {pathDisplay}
+          </div>
+
+          {/* Date */}
+          <div
+            style={{
+              fontSize: '10px',
+              color: theme.colors.textMuted,
+              marginTop: '4px',
+              opacity: 0.7,
+            }}
+          >
+            {new Date(ws.created_at).toLocaleDateString()}
+          </div>
+        </div>
+
+        {/* Actions - shown on hover */}
+        <div
+          style={{
+            display: 'flex',
+            gap: '4px',
+            opacity: hovered ? 1 : 0,
+            transition: 'opacity 0.15s',
+            flexShrink: 0,
+          }}
+        >
+          {/* Continue button */}
+          {onContinue && (
+            <button
+              onClick={onContinue}
+              style={{
+                background: theme.colors.accent,
+                color: '#fff',
+                border: 'none',
+                borderRadius: '4px',
+                padding: '4px 8px',
+                fontSize: '10px',
+                fontWeight: 500,
+                cursor: 'pointer',
+                lineHeight: '16px',
+                transition: 'opacity 0.15s',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
+              onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+              title="Continue working"
+            >
+              Continue
+            </button>
+          )}
+
+          {/* Delete button */}
+          {onDelete && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              style={{
+                background: 'transparent',
+                color: theme.colors.textMuted,
+                border: 'none',
+                borderRadius: '4px',
+                padding: '4px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'color 0.15s, background 0.15s',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.color = '#ef4444';
+                e.currentTarget.style.background = '#ef444418';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.color = theme.colors.textMuted;
+                e.currentTarget.style.background = 'transparent';
+              }}
+              title="Delete workspace"
+            >
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+                <line x1="4" y1="4" x2="12" y2="12" />
+                <line x1="12" y1="4" x2="4" y2="12" />
+              </svg>
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ProjectsView({ onContinue, onDeleteWorkspace }: ProjectsViewProps) {
+  const { theme } = useTheme();
+  const { workspaces, activeId, create } = useWorkspaces();
   const [newName, setNewName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
 
@@ -71,7 +258,7 @@ export function ProjectsView() {
         </p>
       </div>
 
-      {/* Create new */}
+      {/* Quick Actions */}
       <div style={{ marginBottom: '24px' }}>
         <div style={{ fontSize: '12px', color: theme.colors.textMuted, marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
           Quick Actions
@@ -89,20 +276,20 @@ export function ProjectsView() {
         </div>
       </div>
 
-      {/* Recent workspaces */}
+      {/* Recent Workspaces */}
       {workspaces.length > 0 && (
         <div>
           <div style={{ fontSize: '12px', color: theme.colors.textMuted, marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             Recent Workspaces
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>
             {workspaces.map(ws => (
-              <ProjectCard
+              <WorkspaceCard
                 key={ws.id}
-                title={ws.name}
-                description={`${new Date(ws.created_at).toLocaleDateString()}`}
-                icon='💼'
-                onClick={() => {}}
+                ws={ws}
+                isActive={ws.id === activeId}
+                onContinue={onContinue ? () => onContinue(ws.id) : undefined}
+                onDelete={() => onDeleteWorkspace?.(ws.id)}
               />
             ))}
           </div>

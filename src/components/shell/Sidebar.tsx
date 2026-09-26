@@ -2,7 +2,6 @@
 
 import { useState, type ReactNode } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useWorkspaces } from '@/hooks/useWorkspaces';
 import { useAuth } from '@/contexts/AuthContext';
 
 type ViewId = 'workspace' | 'projects' | 'ide' | 'collaboration' | 'settings';
@@ -15,6 +14,8 @@ interface SidebarProps {
   currentView?: string;
   onCreateTerminal?: () => void;
   onOpenWizard?: () => void;
+  onCloseWorkspace?: (id: string) => void;
+  onActivateWorkspace?: (id: string) => void;
 }
 
 const SECTION_LABEL_STYLE: React.CSSProperties = {
@@ -208,19 +209,19 @@ function WorkspaceItem({
       )}
       {/* Close button - shown on hover */}
       {onClose && (
-        <button
+        <div
           onClick={(e) => {
             e.stopPropagation();
             onClose();
           }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.color = 'var(--dwo-color-error, #ef4444)';
-            e.currentTarget.style.background = 'var(--dwo-color-error, #ef4444)18';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.color = 'var(--dwo-color-text-muted, #888)';
-            e.currentTarget.style.background = 'transparent';
-          }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = 'var(--dwo-color-error, #ef4444)';
+              e.currentTarget.style.background = '#ef444418';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = 'var(--dwo-color-text-muted, #888)';
+              e.currentTarget.style.background = 'transparent';
+            }}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -242,7 +243,7 @@ function WorkspaceItem({
             <line x1="4" y1="4" x2="12" y2="12" />
             <line x1="12" y1="4" x2="4" y2="12" />
           </svg>
-        </button>
+        </div>
       )}
     </button>
   );
@@ -256,9 +257,10 @@ export function Sidebar({
   currentView = 'workspace',
   onCreateTerminal,
   onOpenWizard,
+  onCloseWorkspace,
+  onActivateWorkspace,
 }: SidebarProps) {
   const { theme } = useTheme();
-  const { create: createWs, selectFolder, activate: activateWs, close: closeWs } = useWorkspaces();
   const { currentUser, signOut } = useAuth();
   const [newWsName, setNewWsName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
@@ -275,7 +277,7 @@ export function Sidebar({
     }
     setIsCreating(true);
     try {
-      await createWs(newWsName);
+      onOpenWizard?.();
       setNewWsName('');
       setIsCreating(false);
     } catch (error) {
@@ -284,22 +286,8 @@ export function Sidebar({
     }
   };
 
-  const handlePickFolder = async () => {
-    setIsCreating(true);
-    try {
-      const selectedPath = await selectFolder();
-      if (selectedPath) {
-        const folderName = selectedPath.split('/').filter(Boolean).pop() || 'Untitled';
-        try {
-          await createWs(folderName, selectedPath);
-        } catch (error) {
-          console.error('Failed to create workspace:', error);
-        }
-      }
-    } catch (error) {
-      console.error('[Sidebar] Error in handlePickFolder:', error);
-    }
-    setIsCreating(false);
+  const handlePickFolder = () => {
+    onOpenWizard?.();
   };
 
   const handleViewChange = (viewId: string) => {
@@ -376,27 +364,29 @@ export function Sidebar({
               background: 'none',
               border: 'none',
               cursor: 'pointer',
-              padding: '5px',
+              padding: '6px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              borderRadius: '5px',
+              borderRadius: '6px',
               color: theme.colors.textMuted,
-              transition: 'color 0.12s, background 0.12s',
+              transition: 'color 0.15s ease, background 0.15s ease, transform 0.15s ease',
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.color = theme.colors.text;
               e.currentTarget.style.background = theme.colors.bgTertiary;
+              e.currentTarget.style.transform = 'scale(1.05)';
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.color = theme.colors.textMuted;
               e.currentTarget.style.background = 'none';
+              e.currentTarget.style.transform = 'scale(1)';
             }}
             title="Close sidebar"
           >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-              <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              <line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+              <line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
             </svg>
           </button>
         )}
@@ -625,10 +615,10 @@ export function Sidebar({
                 ws={ws}
                 isActive={ws.id === activeId}
                 onClick={() => {
-                  activateWs(ws.id);
+                  onActivateWorkspace?.(ws.id);
                   setMainView?.('workspace');
                 }}
-                onClose={() => closeWs(ws.id)}
+                onClose={() => onCloseWorkspace?.(ws.id)}
               />
             </div>
           ))}
