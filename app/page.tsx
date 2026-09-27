@@ -8,6 +8,7 @@ import { ProjectsView } from '@/components/projects/ProjectsView';
 import { CollaborationPanel } from '@/components/collaboration/CollaborationPanel';
 import { SettingsPanel } from '@/components/settings/SettingsPanel';
 import { ErrorReporter } from '@/components/diagnostics/ErrorReporter';
+import { ErrorBoundary } from '@/components/diagnostics/ErrorBoundary';
 import { IDEView } from '@/views/ide/IDEView';
 import { useWorkspaces } from '@/contexts/WorkspacesContext';
 import { WorkspacesProvider } from '@/contexts/WorkspacesContext';
@@ -20,9 +21,24 @@ import { isTauri } from '@/lib/tauri';
 type MainView = 'projects' | 'workspace' | 'grid' | 'ide' | 'collaboration' | 'settings';
 
 function AppShell() {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  // Persist sidebar open/closed state across sessions via localStorage
+  const getInitialSidebarOpen = (): boolean => {
+    try {
+      const saved = localStorage.getItem('dwo-sidebar-open');
+      if (saved !== null) return saved === 'true';
+    } catch {}
+    return true; // default: sidebar open on first visit
+  };
+  const [sidebarOpen, setSidebarOpen] = useState(getInitialSidebarOpen);
   const [mainView, setMainView] = useState<MainView>('workspace');
   const [showWizard, setShowWizard] = useState(false);
+
+  // Persist sidebar state whenever it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem('dwo-sidebar-open', String(sidebarOpen));
+    } catch {}
+  }, [sidebarOpen]);
 
   const {
     workspaces,
@@ -183,8 +199,12 @@ function AppShell() {
           <button
             onClick={() => setSidebarOpen(true)}
             style={{
+              position: 'fixed',
+              left: 0,
+              top: '50%',
+              transform: 'translateY(-50%)',
               width: '28px',
-              height: '52px',
+              height: '56px',
               background: 'var(--dwo-color-bg-secondary, #111111)',
               border: 'none',
               borderLeft: '1px solid var(--dwo-color-border, #2a2a2a)',
@@ -196,8 +216,7 @@ function AppShell() {
               justifyContent: 'center',
               color: 'var(--dwo-color-text-muted, #888888)',
               transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-              position: 'relative',
-              zIndex: 10,
+              zIndex: 100,
               boxShadow: '2px 0 8px rgba(0,0,0,0.3)',
             }}
             onMouseEnter={e => {
@@ -263,7 +282,9 @@ function AppShell() {
 
           {/* Phase 7: IDE View */}
           {mainView === 'ide' && (
-            <IDEView initialPath={activeWorkspace?.path || undefined} />
+            <ErrorBoundary label="IDE">
+              <IDEView initialPath={activeWorkspace?.path || undefined} />
+            </ErrorBoundary>
           )}
         </main>
       </div>
