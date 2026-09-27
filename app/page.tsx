@@ -246,53 +246,55 @@ function AppShell() {
       </div>
     </div>
 
-    {/* Sidebar toggle — rendered outside overflow containers so it's never clipped */}
-    {!sidebarOpen && (
-      <button
-        onClick={() => setSidebarOpen(true)}
-        style={{
-          position: 'fixed',
-          left: 0,
-          bottom: '100px',
-          width: '36px',
-          height: '64px',
-          background: '#111111',
-          border: 'none',
-          borderLeft: '1px solid #2a2a2a',
-          borderRight: '1px solid #2a2a2a',
-          borderBottom: '1px solid #2a2a2a',
-          borderRadius: '0 8px 0 0',
-          cursor: 'pointer',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '2px',
-          color: '#888888',
-          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-          zIndex: 1000,
-          boxShadow: '2px 0 8px rgba(0,0,0,0.3)',
-        }}
-        onMouseEnter={e => {
-          e.currentTarget.style.background = '#1a1a1a';
-          e.currentTarget.style.color = '#4a9eff';
-          e.currentTarget.style.width = '40px';
-        }}
-        onMouseLeave={e => {
-          e.currentTarget.style.background = '#111111';
-          e.currentTarget.style.color = '#888888';
-          e.currentTarget.style.width = '36px';
-        }}
-        title="Open sidebar"
-      >
+    {/* Sidebar toggle — ALWAYS visible as a permanent fixture */}
+    <button
+      onClick={() => setSidebarOpen(!sidebarOpen)}
+      style={{
+        position: 'fixed',
+        left: 0,
+        top: '12px',
+        width: '36px',
+        height: '36px',
+        background: '#111111',
+        border: 'none',
+        borderBottom: '1px solid #2a2a2a',
+        borderRight: '1px solid #2a2a2a',
+        borderRadius: '0 0 8px 0',
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: sidebarOpen ? '#888888' : '#4a9eff',
+        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+        zIndex: 1000,
+        boxShadow: '2px 2px 8px rgba(0,0,0,0.3)',
+        opacity: 0.8,
+      }}
+      onMouseEnter={e => {
+        e.currentTarget.style.background = '#1a1a1a';
+        e.currentTarget.style.opacity = '1';
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.background = '#111111';
+        e.currentTarget.style.opacity = '0.8';
+      }}
+      title={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+    >
+      {sidebarOpen ? (
+        // Close icon (X)
+        <svg width="18" height="18" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+          <line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+        </svg>
+      ) : (
+        // Hamburger icon (☰)
         <svg width="18" height="18" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
           <rect x="2" y="3" width="12" height="1.5" rx="0.75" fill="currentColor" />
           <rect x="2" y="7.25" width="12" height="1.5" rx="0.75" fill="currentColor" />
           <rect x="2" y="11" width="12" height="1.5" rx="0.75" fill="currentColor" />
         </svg>
-        <span style={{ fontSize: '8px', lineHeight: '1', opacity: 0.7 }}>菜单</span>
-      </button>
-    )}
+      )}
+    </button>
   </>
   );
 }
