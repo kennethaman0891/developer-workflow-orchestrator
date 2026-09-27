@@ -16,6 +16,7 @@ pub mod tasks;
 pub mod plugins;
 pub mod diagnostics;
 pub mod workspace;
+pub mod lsp;
 
 use std::path::PathBuf;
 use std::fs::File;
@@ -68,6 +69,15 @@ pub fn run() {
             let plugin_manager = plugins::PluginManager::new();
             app.manage(plugin_manager);
 
+            // Initialize the file watcher (debounced `file-changed` events)
+            let watch_manager = events::watcher::WatchManager::new(app.handle().clone());
+            app.manage(watch_manager);
+
+            // Initialize the language-server manager (stdio children relayed
+            // over `lsp-stdout` / `lsp-exit`; killed on stop, unwatch and exit)
+            let lsp_manager = lsp::LspManager::new(app.handle().clone());
+            app.manage(lsp_manager);
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -95,6 +105,15 @@ pub fn run() {
             fs::commands::rename,
             fs::commands::delete,
             fs::commands::search,
+            fs::commands::search_files,
+            fs::commands::list_tree,
+            // File watching commands
+            events::commands::watch_path,
+            events::commands::unwatch_path,
+            // Language server commands
+            lsp::commands::lsp_start,
+            lsp::commands::lsp_write,
+            lsp::commands::lsp_stop,
             // Workspace commands
             state::commands::create_workspace,
             state::commands::rename_workspace,
@@ -129,6 +148,7 @@ pub fn run() {
             // Git commands
             git::commands::git_status,
             git::commands::git_stage,
+            git::commands::git_unstage,
             git::commands::git_commit,
             git::commands::git_log,
             git::commands::git_branch,

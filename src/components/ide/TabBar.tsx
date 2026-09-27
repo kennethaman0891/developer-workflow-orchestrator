@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import { FileIcon } from '@/lib/setiIcons';
 
 export interface Tab {
   path: string;
@@ -17,38 +18,6 @@ interface TabBarProps {
 
 function getFileName(path: string): string {
   return path.split('/').pop() || path;
-}
-
-function getIcon(path: string): string {
-  const ext = path.split('.').pop()?.toLowerCase();
-  switch (ext) {
-    case 'ts':
-    case 'tsx':
-      return '🔷';
-    case 'js':
-    case 'jsx':
-      return '🔶';
-    case 'py':
-      return '🐍';
-    case 'rs':
-      return '🦀';
-    case 'json':
-      return '📋';
-    case 'html':
-    case 'htm':
-      return '🌐';
-    case 'css':
-    case 'scss':
-    case 'less':
-      return '🎨';
-    case 'md':
-      return '📝';
-    case 'xml':
-    case 'plist':
-      return '📄';
-    default:
-      return '📄';
-  }
 }
 
 export function TabBar({ tabs, activePath, onTabClick, onTabClose, className }: TabBarProps) {
@@ -95,7 +64,7 @@ export function TabBar({ tabs, activePath, onTabClick, onTabClose, className }: 
               position: 'relative',
             }}
           >
-            <span style={{ fontSize: '11px', flexShrink: 0 }}>{getIcon(tab.path)}</span>
+            <span style={{ flexShrink: 0 }}><FileIcon path={tab.path} size={13} /></span>
             <span style={{
               flex: 1,
               overflow: 'hidden',

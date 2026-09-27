@@ -40,6 +40,10 @@ export async function fsDelete(path: string): Promise<void> {
   await invoke('delete', { path });
 }
 
+/**
+ * Search file contents (legacy shape): paths of files containing `pattern`.
+ * Use `searchContent` in `lib/api.ts` for structured results.
+ */
 export async function fsSearch(pattern: string, path?: string): Promise<string[]> {
   return invoke<string[]>('search', { pattern, path });
 }

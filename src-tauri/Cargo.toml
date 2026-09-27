@@ -36,6 +36,7 @@ dirs = "5"
 chrono = { version = "0.4", features = ["serde"] }
 async-channel = "2"
 once_cell = "1"
+notify = "6"
 objc2 = { version = "0.6", features = ["exception"] }
 
 # DWO patch: tao 0.35.3 crashes on macOS 26 (Tahoe) at launch — an NSException

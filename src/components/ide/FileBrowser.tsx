@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { listFiles, type FsEntry } from '@/lib/api';
+import { invoke } from '@/lib/tauri';
+import { FolderIcon, ChevronRight, ChevronDown, FileIcon } from '@/lib/setiIcons';
 
 interface FileNode {
   name: string;
@@ -11,58 +12,63 @@ interface FileNode {
   expanded?: boolean;
 }
 
+/** One node of the backend `list_tree` response (flattened FsEntry + children). */
+interface TreeNode {
+  name: string;
+  path: string;
+  is_dir: boolean;
+  size?: number | null;
+  mtime?: string | null;
+  children?: TreeNode[];
+}
+
+/** Response of the `list_tree` Tauri command. */
+interface TreeListing {
+  root: string;
+  truncated: boolean;
+  entries: TreeNode[];
+}
+
 interface FileBrowserProps {
   rootPath: string;
   onFileSelect: (path: string) => void;
   className?: string;
+  /**
+   * Bump this counter to force a re-read of the tree. Used by the
+   * `file-changed` listener in the IDE view so external edits show up
+   * without remounting the browser.
+   */
+  refreshToken?: number;
+}
+
+/** Empty listing used as the web-mode fallback (no Tauri runtime). */
+function emptyTree(root: string): TreeListing {
+  return { root, truncated: false, entries: [] };
 }
 
 /**
- * Recursively build a file tree from flat directory listings
+ * Convert backend tree nodes into render nodes (expansion state included).
  */
-async function buildRecursiveTree(
-  basePath: string,
-  depth: number = 0,
-  maxDepth: number = 5,
-): Promise<FileNode[]> {
-  if (depth > maxDepth) return [];
+function toFileNodes(entries: TreeNode[]): FileNode[] {
+  return entries.map(entry => ({
+    name: entry.name,
+    path: entry.path,
+    is_dir: entry.is_dir,
+    children: entry.is_dir ? toFileNodes(entry.children ?? []) : undefined,
+    expanded: false,
+  }));
+}
 
-  let entries: FsEntry[];
-  try {
-    entries = await listFiles(basePath);
-  } catch (error) {
-    console.error(`Failed to list ${basePath}:`, error);
-    return [];
-  }
-
-  // Separate dirs and files
-  const dirs = entries.filter(e => e.is_dir).sort((a, b) => a.name.localeCompare(b.name));
-  const files = entries.filter(e => !e.is_dir).sort((a, b) => a.name.localeCompare(b.name));
-
-  const nodes: FileNode[] = [];
-
-  // Add directories first
-  for (const dir of dirs) {
-    const children = await buildRecursiveTree(dir.path, depth + 1, maxDepth);
-    nodes.push({
-      name: dir.name,
-      path: dir.path,
-      is_dir: true,
-      children,
-      expanded: false,
-    });
-  }
-
-  // Add files
-  for (const file of files) {
-    nodes.push({
-      name: file.name,
-      path: file.path,
-      is_dir: false,
-    });
-  }
-
-  return nodes;
+/**
+ * Re-apply the expansion set to a freshly loaded tree so a refresh (external
+ * file change) does not collapse folders the user had open.
+ */
+function applyExpansion(nodes: FileNode[], expanded: Set<string>): FileNode[] {
+  return nodes.map(node => ({
+    ...node,
+    expanded: node.is_dir ? expanded.has(node.path) : node.expanded,
+    children: node.children ? applyExpansion(node.children, expanded) : node.children,
+  }));
 }
 
 function FileNodeComponent({
@@ -95,10 +101,10 @@ function FileNodeComponent({
           onMouseEnter={e => { e.currentTarget.style.background = '#2a2a2a'; }}
           onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
         >
-          <span style={{ fontSize: '10px', width: '12px', display: 'inline-block' }}>
-            {node.expanded ? '▼' : '▶'}
+          <span style={{ fontSize: '12px', width: '12px', justifyContent: 'center' }}>
+            {node.expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
           </span>
-          <span style={{ fontSize: '14px' }}>{node.expanded ? '📂' : '📁'}</span>
+          <span>{node.expanded ? <FolderIcon expanded size={14} /> : <FolderIcon size={14} />}</span>
           <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {node.name}
           </span>
@@ -134,8 +140,8 @@ function FileNodeComponent({
       onMouseEnter={e => { e.currentTarget.style.background = '#2a2a2a'; }}
       onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
     >
-      <span style={{ fontSize: '10px', width: '12px', display: 'inline-block' }} />
-      <span style={{ fontSize: '14px' }}>📄</span>
+      <span style={{ width: '12px', display: 'inline-block' }} />
+      <span><FileIcon path={node.path} size={14} /></span>
       <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {node.name}
       </span>
@@ -143,33 +149,50 @@ function FileNodeComponent({
   );
 }
 
-export function FileBrowser({ rootPath, onFileSelect, className }: FileBrowserProps) {
+export function FileBrowser({ rootPath, onFileSelect, className, refreshToken }: FileBrowserProps) {
   const [nodes, setNodes] = useState<FileNode[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [truncated, setTruncated] = useState(false);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
+  // First load only: a refresh keeps the current tree on screen instead of
+  // flashing the "Loading files..." placeholder.
   const loadedRef = useRef(false);
+  const expandedRef = useRef(expandedPaths);
+  expandedRef.current = expandedPaths;
 
-  // Load tree when rootPath changes
+  // Load the tree when the root changes, and again whenever `refreshToken`
+  // is bumped by an external `file-changed` event. A whole `list_tree` call
+  // walks the tree in the backend (ignore rules applied there, no recursion
+  // here). The cancellation flag keeps a superseded request — StrictMode's
+  // double mount, or a rapid burst of refreshes — from clobbering a newer one.
   useEffect(() => {
-    if (!rootPath || loadedRef.current) return;
+    if (!rootPath) return;
 
-    setLoading(true);
+    let cancelled = false;
+    if (!loadedRef.current) setLoading(true);
     setError(null);
 
-    buildRecursiveTree(rootPath)
-      .then(result => {
-        setNodes(result);
+    invoke<TreeListing>('list_tree', { path: rootPath }, emptyTree(rootPath))
+      .then(listing => {
+        if (cancelled) return;
+        setNodes(applyExpansion(toFileNodes(listing.entries), expandedRef.current));
+        setTruncated(listing.truncated);
         loadedRef.current = true;
       })
       .catch(err => {
-        console.error('Failed to build file tree:', err);
+        if (cancelled) return;
+        console.error('Failed to load file tree:', err);
         setError(err.message || 'Failed to load files');
       })
       .finally(() => {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       });
-  }, [rootPath]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [rootPath, refreshToken]);
 
   const handleToggle = useCallback((path: string) => {
     setExpandedPaths(prev => {
@@ -256,6 +279,18 @@ export function FileBrowser({ rootPath, onFileSelect, className }: FileBrowserPr
       }}>
         {rootPath || '/'}
       </div>
+
+      {/* Truncation notice (depth / entry cap hit by the backend) */}
+      {truncated && (
+        <div style={{
+          padding: '4px 12px',
+          fontSize: '11px',
+          color: '#c9a227',
+          borderBottom: '1px solid #2a2a2a',
+        }}>
+          Listing truncated — hidden entries were skipped or beyond the depth limit.
+        </div>
+      )}
 
       {/* File tree */}
       <div style={{ padding: '4px 0' }}>

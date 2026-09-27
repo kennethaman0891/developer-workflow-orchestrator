@@ -57,10 +57,57 @@ export async function deleteFile(path: string): Promise<void> {
 }
 
 /**
- * Search for files matching a pattern
+ * Search for files whose *content* matches a pattern (legacy shape).
+ *
+ * Returns the de-duplicated paths of matching files. Prefer
+ * {@link searchContent} for structured results with line numbers and the
+ * `truncated` flag.
  */
 export async function searchFiles(pattern: string, path?: string): Promise<string[]> {
   return invoke<string[]>('search', { pattern, path });
+}
+
+/** One content match inside a file (mirrors the Rust `SearchResult`). */
+export interface SearchResult {
+  path: string;
+  line_number: number;
+  line_text: string;
+  byte_offset: number;
+}
+
+/** Result of the bounded content search (mirrors the Rust `SearchResponse`). */
+export interface SearchResponse {
+  /** Matches in walk order — capped at 500 by the backend. */
+  results: SearchResult[];
+  /** True when the result cap (500) or the time budget (2s) ended the walk. */
+  truncated: boolean;
+}
+
+/**
+ * Bounded, ripgrep-style content search.
+ *
+ * The backend skips binary/huge files and `node_modules`/`target`/`dist`/
+ * `.gitignore`d paths, never follows symlinks, and stops after 500 results
+ * or 2000ms (`truncated` reports which bound ended the search).
+ *
+ * @param pattern        Literal substring by default; compiled as a regex
+ *                       only when it is valid and <= 512 bytes.
+ * @param path           Directory to search (defaults to the backend cwd).
+ * @param caseSensitive  Defaults to `true`.
+ * @param glob           Optional file-name filter, e.g. `*.rs`.
+ */
+export async function searchContent(
+  pattern: string,
+  path?: string,
+  caseSensitive?: boolean,
+  glob?: string,
+): Promise<SearchResponse> {
+  return invoke<SearchResponse>('search_files', {
+    pattern,
+    path,
+    caseSensitive,
+    glob,
+  });
 }
 
 /**

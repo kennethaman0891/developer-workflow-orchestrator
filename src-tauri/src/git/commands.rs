@@ -21,6 +21,16 @@ pub async fn git_stage(
     manager.stage(&file).await
 }
 
+/// Unstage a file (moves it out of the index)
+#[tauri::command]
+pub async fn git_unstage(
+    project_path: String,
+    file: String,
+) -> Result<GitResult, String> {
+    let manager = GitManager::new(std::path::PathBuf::from(&project_path));
+    manager.unstage(&file).await
+}
+
 /// Commit changes
 #[tauri::command]
 pub async fn git_commit(

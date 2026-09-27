@@ -25,6 +25,13 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { getLanguageForPath, getLanguageLabel } from '@/lib/monaco/language';
 import { applyMonacoTheme } from '@/lib/monaco/theme';
 import { installMonacoEnvironment } from '@/lib/monaco/environment';
+import {
+  createLspClient,
+  DwoLspTransport,
+  type DwoLspClientHandle,
+  type LspStartResult,
+} from '@/lib/monaco/lspTransport';
+import { invoke } from '@/lib/tauri';
 
 type MonacoModule = typeof import('monaco-editor');
 
@@ -87,6 +94,75 @@ function pathToUri(monaco: MonacoModule, path: string): Uri {
     normalized = normalized[0].toLowerCase() + normalized.slice(1);
   }
   return monaco.Uri.from({ scheme: 'file', path: normalized });
+}
+
+// ── Language-server sessions ────────────────────────────────────────────────
+//
+// Architectural decision (A) — full rationale in `src/lib/monaco/lspTransport.ts`:
+// an LSP client attaches **only** to languages Monaco has no language worker
+// for. `.ts`/`.js` keep their built-in TypeScript worker (completion,
+// diagnostics, hints) and are deliberately *never* handed to an external
+// server, so no provider is registered twice and no diagnostic is shown twice.
+// The backend still speaks the `typescript-language-server --stdio` protocol;
+// flipping ts/js over later is a frontend-only change.
+
+/** Languages DWO attaches an external language server to. */
+const LSP_LANGUAGES = new Set([
+  'rust',
+  'python',
+  'go',
+  'php',
+  'ruby',
+  'c',
+  'cpp',
+  'shell',
+  'shellscript',
+  'yaml',
+  'lua',
+  'dart',
+  'swift',
+]);
+
+/** Languages already warned about, so a missing binary is logged once. */
+const lspWarnedLanguages = new Set<string>();
+
+/** Feature-detect failure: warn once per language, never per render. */
+function warnLspUnavailable(language: string, reason: string): void {
+  if (lspWarnedLanguages.has(language)) return;
+  lspWarnedLanguages.add(language);
+  console.warn(
+    `[lsp] no language server attached for '${language}' (${reason}). ` +
+      'The editor keeps Monaco\'s built-in behaviour; install the server to enable LSP.',
+  );
+}
+
+/** Best-effort kill for a server that started but never became the session. */
+function stopClient(clientId: string): void {
+  invoke('lsp_stop', { clientId }, null).catch(() => undefined);
+}
+
+/**
+ * Best-effort `file://` URI of the directory holding `filePath`.
+ *
+ * `lsp_start` walks up from there to the nearest project marker
+ * (`Cargo.toml`, `package.json`, `.git`, …) and reports the resolved root
+ * back as `root_uri`, which becomes `initialize.rootUri`.
+ */
+function directoryUri(filePath: string): string {
+  const normalized = filePath.replace(/\\/g, '/');
+  const slash = normalized.lastIndexOf('/');
+  const dir = slash > 0 ? normalized.slice(0, slash) : '/';
+  if (/^[A-Za-z]:\//.test(dir)) return `file:///${dir}`;
+  if (/^[A-Za-z]:$/.test(dir)) return `file:///${dir}/`;
+  return dir.startsWith('/') ? `file://${dir}` : 'file:///';
+}
+
+/** One live language server bound to a single language. */
+interface LspSession {
+  language: string;
+  clientId: string;
+  transport: DwoLspTransport;
+  client: DwoLspClientHandle;
 }
 
 /** Release the cached model for a path — called when its tab is closed. */
@@ -155,6 +231,41 @@ export function MonacoEditor({ filePath, content, onChange, onSave, onStatus }: 
       instance.setModel(model);
     }
     instance.focus();
+  }, []);
+
+  // ── Language-server session ───────────────────────────────────────────────
+  // Exactly one server at a time: Monaco's LSP client registers its providers
+  // globally per document selector, so overlapping sessions would fight over
+  // the same models (and both would push marker owner `"lsp"`).
+  const lspSessionRef = useRef<LspSession | null>(null);
+
+  /** Tear the active session down: client → transport → backend, in that order. */
+  const stopLsp = useCallback(() => {
+    const session = lspSessionRef.current;
+    if (!session) return;
+    lspSessionRef.current = null;
+
+    // Order matters: the client may still emit `textDocument/didClose` while
+    // disposing, and that notification needs a live transport to ride on.
+    try {
+      session.client.dispose();
+    } catch (error) {
+      console.warn('[lsp] client dispose failed:', error);
+    }
+    session.transport.dispose();
+
+    // Drop diagnostics owned by the LSP layer so stale squiggles cannot
+    // outlive the session. Monaco's built-in workers use different owners.
+    const monaco = monacoRef.current;
+    if (monaco) {
+      for (const model of monaco.editor.getModels()) {
+        monaco.editor.setModelMarkers(model, 'lsp', []);
+      }
+    }
+
+    invoke('lsp_stop', { clientId: session.clientId }, null).catch((error: unknown) => {
+      console.warn('[lsp] lsp_stop failed:', error);
+    });
   }, []);
 
   // ── Create the editor exactly once per mount ───────────────────────────────
@@ -237,6 +348,7 @@ export function MonacoEditor({ filePath, content, onChange, onSave, onStatus }: 
 
     return () => {
       cancelled = true;
+      stopLsp();
       disposables.forEach((d) => d.dispose());
       editorRef.current?.dispose();
       editorRef.current = null;
@@ -256,6 +368,74 @@ export function MonacoEditor({ filePath, content, onChange, onSave, onStatus }: 
     if (!monaco || !instance) return;
     attachModel(monaco, instance);
   }, [editorReady, filePath, attachModel]);
+
+  // ── Attach a language server for the active file's language ───────────────
+  // Declared *after* the model swap so the model is already attached when this
+  // runs. Same-language file switches reuse the running server; switching to a
+  // non-LSP language (including ts/js, see decision (A)) tears it down.
+  useEffect(() => {
+    if (!editorReady) return;
+    const monaco = monacoRef.current;
+    const model = editorRef.current?.getModel();
+    if (!monaco || !model) return;
+
+    const language = model.getLanguageId();
+
+    if (!LSP_LANGUAGES.has(language)) {
+      stopLsp();
+      return;
+    }
+    // Already attached for this language — nothing to do for the new file.
+    if (lspSessionRef.current?.language === language) return;
+
+    // Stale session from a different language (or an in-flight start).
+    let cancelled = false;
+    stopLsp();
+
+    const rootUri = directoryUri(filePathRef.current);
+    invoke<LspStartResult>(
+      'lsp_start',
+      { language, rootUri },
+      // Web build / non-Tauri window: report "unavailable", never reject.
+      { available: false, client_id: null, reason: 'not running inside the Tauri shell', root_uri: null },
+    )
+      .then((result) => {
+        if (cancelled) {
+          if (result?.client_id) stopClient(result.client_id);
+          return;
+        }
+        if (!result?.available || !result?.client_id) {
+          warnLspUnavailable(language, result?.reason || 'no server binary found');
+          return;
+        }
+
+        const transport = new DwoLspTransport(language, result.client_id, result.root_uri ?? rootUri);
+        let client: DwoLspClientHandle;
+        try {
+          client = createLspClient(monaco.lsp.MonacoLspClient, transport);
+        } catch (error) {
+          transport.dispose();
+          stopClient(result.client_id);
+          warnLspUnavailable(language, error instanceof Error ? error.message : String(error));
+          return;
+        }
+
+        if (cancelled) {
+          client.dispose();
+          transport.dispose();
+          stopClient(result.client_id);
+          return;
+        }
+        lspSessionRef.current = { language, clientId: result.client_id, transport, client };
+      })
+      .catch((error: unknown) => {
+        warnLspUnavailable(language, error instanceof Error ? error.message : String(error));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [editorReady, filePath, stopLsp]);
 
   // ── Theme changes ──────────────────────────────────────────────────────────
   useEffect(() => {

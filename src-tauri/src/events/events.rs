@@ -93,4 +93,18 @@ mod tests {
             "collaboration-update"
         );
     }
+
+    /// The wire shape the frontend's `FileChangedPayload` type decodes:
+    /// adjacently tagged, i.e. `{type: "FileChanged", data: {path, action}}`.
+    #[test]
+    fn file_changed_serializes_adjacently() {
+        let event = DwoEvent::FileChanged {
+            path: "/w/src/main.rs".to_string(),
+            action: "modified".to_string(),
+        };
+        let json = serde_json::to_value(&event).unwrap();
+        assert_eq!(json["type"], "FileChanged");
+        assert_eq!(json["data"]["path"], "/w/src/main.rs");
+        assert_eq!(json["data"]["action"], "modified");
+    }
 }

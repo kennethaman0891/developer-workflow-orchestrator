@@ -1,15 +1,43 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { MonacoEditor, disposeEditorModel } from '@/components/editor/MonacoEditor';
+import { ErrorBoundary } from '@/components/diagnostics/ErrorBoundary';
 import { FileBrowser } from '@/components/ide/FileBrowser';
+import { GitPanel } from '@/components/git/GitPanel';
 import { TabBar, type Tab } from '@/components/ide/TabBar';
 import { useOpenFiles } from '@/hooks/useOpenFiles';
 import { readFile, writeFile, pickFolder } from '@/lib/api';
+import { LargePlaceholder } from '@/lib/setiIcons';
+import { invoke, isTauri } from '@/lib/tauri';
+import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
 interface IDEViewProps {
   // Optional initial path to start at (e.g., from a workspace)
   initialPath?: string;
+}
+
+/**
+ * Payload of the backend `file-changed` event.
+ *
+ * `DwoEvent::FileChanged` is serde-serialized adjacently
+ * (`tag = "type"`, `content = "data"`), so the wire shape is
+ * `{type: "FileChanged", data: {path, action}}`. The flat form is tolerated
+ * as well so a payload change upstream cannot silently break the listener.
+ */
+interface FileChangedPayload {
+  type?: string;
+  data?: { path?: string; action?: string };
+  path?: string;
+  action?: string;
+}
+
+/** Frontend debounce for tree refreshes (backend already debounced at 200ms). */
+const TREE_REFRESH_MS = 300;
+
+/** Uniform separators and no trailing slash — used to match event paths to tabs. */
+function normalizePath(path: string): string {
+  return path.replace(/\\/g, '/').replace(/\/+$/, '');
 }
 
 type FileCategory = 'code' | 'image' | 'pdf' | 'other';
@@ -148,7 +176,7 @@ function FileViewer({
             if (container) {
               container.innerHTML = `
                 <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #888;">
-                  <div style="font-size: 48px; margin-bottom: 12px;">📄</div>
+                  <LargePlaceholder type="pdf" />
                   <div>PDF preview not available</div>
                   <div style="font-size: 11px; color: #555; margin-top: 8px;">Use your system's PDF viewer</div>
                 </div>
@@ -173,7 +201,7 @@ function FileViewer({
         gap: '8px',
         padding: '20px',
       }}>
-        <div style={{ fontSize: '48px' }}>📄</div>
+        <LargePlaceholder type="file" />
         <div>Cannot preview this file type</div>
         <div style={{ fontSize: '11px', color: '#444' }}>
           Supported: Code files, images (PNG, JPG, GIF, SVG, WebP), PDFs
@@ -183,13 +211,17 @@ function FileViewer({
   }
 
   // Code/text file - Monaco handles syntax, completion and folding itself.
+  // The boundary keeps an editor-side render crash from taking the file tree,
+  // tabs and terminal down with it.
   return (
-    <MonacoEditor
-      filePath={filePath}
-      content={content}
-      onChange={onChange}
-      onSave={onSave}
-    />
+    <ErrorBoundary label="Editor">
+      <MonacoEditor
+        filePath={filePath}
+        content={content}
+        onChange={onChange}
+        onSave={onSave}
+      />
+    </ErrorBoundary>
   );
 }
 
@@ -200,13 +232,85 @@ export function IDEView({ initialPath }: IDEViewProps) {
     addFile,
     closeFile,
     saveFile,
+    markDirty,
     updateContent,
     setActiveFilePath,
   } = useOpenFiles();
 
+  // Mirror of `openFiles` for the file-changed listener: keeps the
+  // subscription stable instead of re-listening on every tab change.
+  const openFilesRef = useRef(openFiles);
+  openFilesRef.current = openFiles;
+
   // Start at initialPath if provided, otherwise user picks folder
   const [currentRootPath, setCurrentRootPath] = useState<string>(initialPath || '');
   const [isPicking, setIsPicking] = useState(false);
+  // Bumped by the debounced `file-changed` listener to re-read the file tree.
+  const [treeRefreshToken, setTreeRefreshToken] = useState(0);
+
+  // Watch the current root for external changes; unwatch it when the root
+  // changes or the view unmounts. The `null` fallback keeps web mode quiet —
+  // `invoke` rejects when called outside Tauri with no fallback.
+  useEffect(() => {
+    if (!currentRootPath || !isTauri()) return;
+    const root = currentRootPath;
+
+    invoke('watch_path', { path: root }, null).catch(err =>
+      console.warn('[IDEView] watch_path failed:', err),
+    );
+
+    return () => {
+      invoke('unwatch_path', { path: root }, null).catch(err =>
+        console.warn('[IDEView] unwatch_path failed:', err),
+      );
+    };
+  }, [currentRootPath]);
+
+  // Subscribe to the backend's debounced `file-changed` events: a change to an
+  // open file marks that tab dirty, any other change refreshes the tree.
+  useEffect(() => {
+    if (!isTauri()) return;
+
+    let unlisten: UnlistenFn | null = null;
+    let disposed = false;
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+    // Coalesce bursts so a multi-file change does not hammer `list_tree`.
+    const scheduleRefresh = () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        refreshTimer = null;
+        setTreeRefreshToken(token => token + 1);
+      }, TREE_REFRESH_MS);
+    };
+
+    listen<FileChangedPayload>('file-changed', event => {
+      const data = event.payload.data ?? event.payload;
+      const path = data.path;
+      if (!path) return;
+
+      const changed = normalizePath(path);
+      const openPath = Array.from(openFilesRef.current.keys()).find(
+        key => normalizePath(key) === changed,
+      );
+      if (openPath) {
+        markDirty(openPath);
+      } else {
+        scheduleRefresh();
+      }
+    })
+      .then(listener => {
+        if (disposed) listener();
+        else unlisten = listener;
+      })
+      .catch(err => console.warn('[IDEView] file-changed listener failed:', err));
+
+    return () => {
+      disposed = true;
+      if (refreshTimer) clearTimeout(refreshTimer);
+      unlisten?.();
+    };
+  }, [markDirty]);
 
   // Handle folder pick
   const handlePickFolder = useCallback(async () => {
@@ -296,7 +400,7 @@ export function IDEView({ initialPath }: IDEViewProps) {
             padding: '20px',
             gap: '16px',
           }}>
-            <div style={{ fontSize: '48px' }}>📁</div>
+            <LargePlaceholder type="folder" />
             <div style={{ fontSize: '14px', color: '#e8e8e8', textAlign: 'center' }}>
               Open a Folder
             </div>
@@ -327,6 +431,9 @@ export function IDEView({ initialPath }: IDEViewProps) {
               {isPicking ? 'Opening...' : 'Select Folder'}
             </button>
           </div>
+
+          {/* Source Control (no workspace yet — shows a friendly empty state) */}
+          <GitPanel />
         </div>
 
         {/* Right Panel: Empty state */}
@@ -346,7 +453,7 @@ export function IDEView({ initialPath }: IDEViewProps) {
             fontSize: '13px',
             gap: '8px',
           }}>
-            <div style={{ fontSize: '48px' }}>📄</div>
+            <LargePlaceholder type="file" />
             <div>Select a folder to explore</div>
             <div style={{ fontSize: '11px', color: '#444' }}>
               Click "Select Folder" in the explorer panel
@@ -426,11 +533,24 @@ export function IDEView({ initialPath }: IDEViewProps) {
           {currentRootPath}
         </div>
 
-        <FileBrowser
-          rootPath={currentRootPath}
-          onFileSelect={handleFileSelect}
-          className="flex-1"
-        />
+        {/* File tree — flexible so the Source Control section fits below it */}
+        <div style={{
+          flex: '1 1 auto',
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'auto',
+        }}>
+          <FileBrowser
+            rootPath={currentRootPath}
+            onFileSelect={handleFileSelect}
+            className="flex-1"
+            refreshToken={treeRefreshToken}
+          />
+        </div>
+
+        {/* Source Control — VS Code-style collapsible git section */}
+        <GitPanel projectPath={currentRootPath} />
       </div>
 
       {/* Right Panel: Editor / Viewer */}
@@ -473,7 +593,7 @@ export function IDEView({ initialPath }: IDEViewProps) {
               userSelect: 'none',
               gap: '8px',
             }}>
-              <div style={{ fontSize: '48px' }}>📄</div>
+        <LargePlaceholder type="file" />
               <div>Select a file to view</div>
               <div style={{ fontSize: '11px', color: '#444' }}>
                 Click any file in the explorer to open it
