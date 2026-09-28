@@ -3,7 +3,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 export interface AppSettings {
-  theme: string;
   fontSize: number;
   wordWrap: boolean;
   minimap: boolean;
@@ -16,7 +15,6 @@ export interface AppSettings {
 const STORAGE_KEY = 'dwo-app-settings';
 
 const DEFAULTS: AppSettings = {
-  theme: 'dark',
   fontSize: 14,
   wordWrap: true,
   minimap: true,
@@ -43,7 +41,6 @@ function saveSettings(s: AppSettings): void {
 }
 
 interface SettingsValue extends AppSettings {
-  setTheme: (key: string) => void;
   setFontSize: (size: number) => void;
   setWordWrap: (wrap: boolean) => void;
   setMinimap: (show: boolean) => void;
@@ -66,7 +63,6 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setSettings(prev => ({ ...prev, ...partial }));
   };
 
-  const setTheme = (key: string) => update({ theme: key });
   const setFontSize = (fontSize: number) => update({ fontSize });
   const setWordWrap = (wordWrap: boolean) => update({ wordWrap });
   const setMinimap = (show: boolean) => update({ minimap: show });
@@ -75,7 +71,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const setAutoExecEnabled = (enabled: boolean) => update({ autoExecEnabled: enabled });
 
   return (
-    <SettingsContext.Provider value={{ ...settings, setTheme, setFontSize, setWordWrap, setMinimap, setTransparency, setShell, setAutoExecEnabled }}>
+    <SettingsContext.Provider value={{ ...settings, setFontSize, setWordWrap, setMinimap, setTransparency, setShell, setAutoExecEnabled }}>
       {children}
     </SettingsContext.Provider>
   );

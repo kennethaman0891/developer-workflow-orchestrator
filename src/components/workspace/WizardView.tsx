@@ -21,9 +21,11 @@ const TEMPLATE_OPTIONS: WorkspaceTemplate[] = [1, 2, 4, 6, 8, 10, 12, 14, 16];
 interface WizardViewProps {
   /** Called when the wizard is closed (cancel or after creation) */
   onClose: () => void;
+  /** Called after a workspace is successfully created (before onClose) */
+  onCreated?: () => void;
 }
 
-export function WizardView({ onClose }: WizardViewProps) {
+export function WizardView({ onClose, onCreated }: WizardViewProps) {
   const { theme } = useTheme();
   const { create, selectFolder: _selectFolder } = useWorkspaces();
 
@@ -57,13 +59,14 @@ export function WizardView({ onClose }: WizardViewProps) {
         command || null,
         color,
       );
+      onCreated?.();
       onClose();
     } catch (error) {
       console.error('Wizard failed:', error);
     } finally {
       setIsCreating(false);
     }
-  }, [projectPath, template, command, color, create, onClose]);
+  }, [projectPath, template, command, color, create, onClose, onCreated]);
 
   // Close on Escape
   useEffect(() => {

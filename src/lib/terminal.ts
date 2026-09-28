@@ -92,3 +92,51 @@ export async function terminalSetVisible(id: string, visible: boolean): Promise<
 export async function terminalDropFiles(id: string, files: string[]): Promise<void> {
   await invoke('terminal_drop_files', { id, files });
 }
+
+// ── Session Handoff ──────────────────────────────────────────────────────────
+
+export interface SessionSummary {
+  id: string;
+  source_session_id: string;
+  title: string;
+  created_at: string;
+  cwd: string;
+  line_count: number;
+}
+
+export interface HandoffArtifact {
+  id: string;
+  source_session_id: string;
+  title: string;
+  created_at: string;
+  cwd: string;
+  columns: number;
+  rows: number;
+  scrollback: string[];
+  notes: string | null;
+  line_count: number;
+}
+
+export async function handoffCapture(
+  sourceId: string,
+  title?: string,
+  notes?: string,
+): Promise<SessionSummary> {
+  return invoke<SessionSummary>('handoff_capture', { sourceId, title: title ?? null, notes: notes ?? null });
+}
+
+export async function handoffList(): Promise<SessionSummary[]> {
+  return invoke<SessionSummary[]>('handoff_list');
+}
+
+export async function handoffGet(id: string): Promise<HandoffArtifact | null> {
+  return invoke<HandoffArtifact | null>('handoff_get', { id });
+}
+
+export async function handoffInject(targetId: string, artifactId: string): Promise<void> {
+  await invoke('handoff_inject', { targetId, artifactId });
+}
+
+export async function handoffDelete(id: string): Promise<void> {
+  await invoke('handoff_delete', { id });
+}

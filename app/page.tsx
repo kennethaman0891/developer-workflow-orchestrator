@@ -15,6 +15,7 @@ import { WorkspacesProvider } from '@/contexts/WorkspacesContext';
 import { SettingsProvider } from '@/contexts/SettingsContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { WizardView } from '@/components/workspace/WizardView';
+import { HandoffPanel } from '@/components/handoff/HandoffPanel';
 import { terminalCreate } from '@/lib/terminal';
 import { isTauri } from '@/lib/tauri';
 
@@ -32,6 +33,8 @@ function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(getInitialSidebarOpen);
   const [mainView, setMainView] = useState<MainView>('workspace');
   const [showWizard, setShowWizard] = useState(false);
+  const [handoffOpen, setHandoffOpen] = useState(false);
+  const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
 
   // Persist sidebar state whenever it changes
   useEffect(() => {
@@ -176,7 +179,10 @@ function AppShell() {
 
       {/* New Workspace Wizard (Cmd+T) */}
       {showWizard && (
-        <WizardView onClose={() => setShowWizard(false)} />
+        <WizardView
+          onClose={() => setShowWizard(false)}
+          onCreated={() => setMainView('workspace')}
+        />
       )}
 
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
@@ -185,13 +191,13 @@ function AppShell() {
           <Sidebar
             workspaces={workspaces}
             activeId={activeId || ''}
-            setSidebarOpen={setSidebarOpen}
             setMainView={(v: string) => setMainView(v as MainView)}
             currentView={mainView}
             onCreateTerminal={createTerminalForWorkspace}
             onOpenWizard={() => setShowWizard(true)}
             onCloseWorkspace={handleCloseWorkspace}
             onActivateWorkspace={activateWs}
+            onOpenHandoff={() => setHandoffOpen(true)}
           />
         )}
 
@@ -233,6 +239,7 @@ function AppShell() {
               onCloseSession={(id) => closeTerminal(id)}
               autoLaunchCommand={activeWorkspace?.command}
               autoLaunchEnabled={true}
+              onActiveSessionChange={setActiveTerminalId}
             />
           </div>
 
@@ -295,6 +302,15 @@ function AppShell() {
         </svg>
       )}
     </button>
+
+    {/* Session handoff panel — app-level overlay, triggered from the sidebar */}
+    {handoffOpen && (
+      <HandoffPanel
+        sessions={sessions}
+        activeId={activeTerminalId}
+        onClose={() => setHandoffOpen(false)}
+      />
+    )}
   </>
   );
 }

@@ -17,6 +17,7 @@ pub mod plugins;
 pub mod diagnostics;
 pub mod workspace;
 pub mod lsp;
+pub mod handoff;
 
 use std::path::PathBuf;
 use std::fs::File;
@@ -78,6 +79,13 @@ pub fn run() {
             let lsp_manager = lsp::LspManager::new(app.handle().clone());
             app.manage(lsp_manager);
 
+            // Initialize handoff manager (persists artifacts to ~/.config/dwo/handoffs/)
+            let handoff_data_dir = dirs::config_dir()
+                .map(|d| d.join("dwo").join("handoffs"))
+                .unwrap_or_else(|| std::path::PathBuf::from("/tmp/dwo/handoffs"));
+            let handoff_manager = handoff::HandoffManager::new(handoff_data_dir);
+            app.manage(handoff_manager);
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -96,6 +104,12 @@ pub fn run() {
             terminal::commands::terminal_set_focus,
             terminal::commands::terminal_set_visible,
             terminal::commands::terminal_drop_files,
+            // Handoff commands
+            handoff::commands::handoff_capture,
+            handoff::commands::handoff_list,
+            handoff::commands::handoff_get,
+            handoff::commands::handoff_inject,
+            handoff::commands::handoff_delete,
             // File system commands
             fs::commands::list_dir,
             fs::commands::read_file,

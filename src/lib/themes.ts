@@ -34,6 +34,28 @@ export interface ThemeTokens {
 }
 
 export const themes: Record<string, ThemeTokens> = {
+  /** VS Code Seti UI – the reference theme for the IDE section */
+  seti: {
+    colors: {
+      bg: '#1e1e1e',          // Seti editor background
+      bgSecondary: '#252526', // Seti sidebar
+      bgTertiary: '#2d2d2d',  // Seti active tab / selection
+      text: '#f8f8f2',        // Seti body text
+      textMuted: '#868a8f',   // Seti muted text
+      accent: '#ff9600',      // Seti keyword / import / decorator orange
+      accentHover: '#ffb44d', // Seti lighter orange hover
+      border: '#3e4452',      // Seti panel border
+      success: '#5ec4b0',     // Seti teal (functions, operators, UI accents)
+      warning: '#d19a66',     // Seti warm accent (numbers, constants)
+      error: '#f44747',       // Seti red
+    },
+    fonts: {
+      monospace: '"JetBrains Mono", "Fira Code", "Consolas", monospace',
+      sans: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    },
+    spacing: { xs: '4px', sm: '8px', md: '16px', lg: '24px', xl: '32px' },
+    borderRadius: { sm: '4px', md: '8px', lg: '12px' },
+  },
   dark: {
     colors: {
       bg: '#0a0a0a',
@@ -122,30 +144,3 @@ export const themes: Record<string, ThemeTokens> = {
 
 export type ThemeKey = keyof typeof themes;
 export type Theme = ThemeTokens;
-
-/** Set CSS custom properties on :root for instant global theme application */
-export function applyTheme(key: ThemeKey): void {
-  const t = themes[key];
-  const root = document.documentElement;
-  for (const [name, value] of Object.entries(t.colors)) {
-    root.style.setProperty(`--dwo-color-${name}`, value);
-  }
-  root.style.setProperty('--dwo-font-mono', t.fonts.monospace);
-  root.style.setProperty('--dwo-font-sans', t.fonts.sans);
-  for (const [name, value] of Object.entries(t.spacing)) {
-    root.style.setProperty(`--dwo-space-${name}`, value);
-  }
-  for (const [name, value] of Object.entries(t.borderRadius)) {
-    root.style.setProperty(`--dwo-radius-${name}`, value);
-  }
-  root.setAttribute('data-theme', key);
-}
-
-/** Read the currently saved theme key from localStorage, falling back to 'dark' */
-export function loadThemeKey(): ThemeKey {
-  try {
-    const saved = localStorage.getItem('dwo-theme');
-    if (saved && saved in themes) return saved as ThemeKey;
-  } catch {}
-  return 'dark';
-}

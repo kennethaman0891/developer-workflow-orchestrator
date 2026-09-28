@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { FileIcon } from '@/lib/setiIcons';
+import { useTheme } from '@/contexts/ThemeContext';
 
 export interface Tab {
   path: string;
@@ -21,6 +22,7 @@ function getFileName(path: string): string {
 }
 
 export function TabBar({ tabs, activePath, onTabClick, onTabClose, className }: TabBarProps) {
+  const { theme } = useTheme();
   const [hoveredTab, setHoveredTab] = useState<string | null>(null);
 
   if (tabs.length === 0) return null;
@@ -30,8 +32,8 @@ export function TabBar({ tabs, activePath, onTabClick, onTabClose, className }: 
       className={className}
       style={{
         display: 'flex',
-        background: '#1e1e1e',
-        borderBottom: '1px solid #2a2a2a',
+        background: theme.colors.bg,
+        borderBottom: `1px solid ${theme.colors.border}`,
         overflow: 'hidden',
         height: '35px',
         flexShrink: 0,
@@ -53,10 +55,10 @@ export function TabBar({ tabs, activePath, onTabClick, onTabClose, className }: 
               padding: '0 12px',
               cursor: 'pointer',
               fontSize: '12px',
-              color: isActive ? '#e8e8e8' : (isHovered ? '#c8c8c8' : '#888'),
-              background: isActive ? '#2d2d2d' : (isHovered ? '#252525' : '#1e1e1e'),
-              borderRight: '1px solid #2a2a2a',
-              borderTop: isActive ? '2px solid #4a9eff' : '2px solid transparent',
+              color: isActive ? theme.colors.text : (isHovered ? theme.colors.text : theme.colors.textMuted),
+              background: isActive ? theme.colors.bgTertiary : (isHovered ? theme.colors.bgSecondary : theme.colors.bg),
+              borderRight: `1px solid ${theme.colors.border}`,
+              borderTop: isActive ? `2px solid ${theme.colors.accent}` : '2px solid transparent',
               transition: 'all 0.15s',
               whiteSpace: 'nowrap',
               minWidth: '100px',
@@ -72,14 +74,14 @@ export function TabBar({ tabs, activePath, onTabClick, onTabClose, className }: 
               fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace',
             }}>
               {getFileName(tab.path)}
-              {tab.dirty && <span style={{ color: '#e85d75', marginLeft: '4px' }}>●</span>}
+              {tab.dirty && <span style={{ color: theme.colors.error, marginLeft: '4px' }}>●</span>}
             </span>
             <button
               onClick={e => { e.stopPropagation(); onTabClose(tab.path); }}
               style={{
                 background: 'none',
                 border: 'none',
-                color: isActive || isHovered ? '#aaa' : 'transparent',
+                color: isActive || isHovered ? theme.colors.textMuted : 'transparent',
                 cursor: 'pointer',
                 fontSize: '14px',
                 lineHeight: 1,
@@ -90,11 +92,11 @@ export function TabBar({ tabs, activePath, onTabClick, onTabClose, className }: 
                 transition: 'all 0.1s',
               }}
               onMouseEnter={e => {
-                e.currentTarget.style.color = '#e8e8e8';
-                e.currentTarget.style.background = '#3a3a3a';
+                e.currentTarget.style.color = theme.colors.text;
+                e.currentTarget.style.background = theme.colors.bgTertiary;
               }}
               onMouseLeave={e => {
-                e.currentTarget.style.color = (isActive || isHovered) ? '#aaa' : 'transparent';
+                e.currentTarget.style.color = (isActive || isHovered) ? theme.colors.textMuted : 'transparent';
                 e.currentTarget.style.background = 'none';
               }}
               title="Close tab"

@@ -190,6 +190,8 @@ interface TerminalLayoutProps {
   autoLaunchCommand?: string | null;
   /** Whether auto-exec permission is enabled */
   autoLaunchEnabled?: boolean;
+  /** Called when the active terminal changes — used by the handoff panel at app level */
+  onActiveSessionChange?: (id: string | null) => void;
 }
 
 export function TerminalLayout({
@@ -200,8 +202,15 @@ export function TerminalLayout({
   layoutKey,
   autoLaunchCommand,
   autoLaunchEnabled,
+  onActiveSessionChange,
 }: TerminalLayoutProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
+  // Sync the active session id upward so the app-level HandoffPanel always
+  // knows which terminal is currently in focus (fallback: first session).
+  useEffect(() => {
+    onActiveSessionChange?.(activeId);
+  }, [activeId, onActiveSessionChange]);
+
   const {
     layout,
     syncActiveFromSessions,
@@ -283,6 +292,12 @@ export function TerminalLayout({
     syncPanels(sessions.map((s) => s.id));
   }, [sessions, syncPanels]);
 
+  // Convert sessions array to Map for O(1) lookups by ID
+  const sessionsMap = React.useMemo(() =>
+    new Map(sessions.map(session => [session.id, session])),
+    [sessions]
+  );
+
   // ── Create terminal helper ─────────────────────────────────────────────────
   const handleCreate = useCallback(() => {
     onCreate?.();
@@ -360,7 +375,7 @@ export function TerminalLayout({
   }
 
   if (maximizedId) {
-    const session = sessions.find((s) => s.id === maximizedId);
+    const session = sessionsMap.get(maximizedId);
     if (!session) return null;
     const prevMode = prevModeRef.current ?? LayoutMode.GRID;
     return (
@@ -388,8 +403,8 @@ export function TerminalLayout({
   if (layout.mode === LayoutMode.SPLIT_H && layout.panels.length === 2) {
     const p1 = layout.panels[0];
     const p2 = layout.panels[1];
-    const s1 = sessions.find((s) => s.id === p1.id);
-    const s2 = sessions.find((s) => s.id === p2.id);
+    const s1 = sessionsMap.get(p1.id);
+    const s2 = sessionsMap.get(p2.id);
     if (!s1 || !s2) return null;
 
     return (
@@ -426,8 +441,8 @@ export function TerminalLayout({
   if (layout.mode === LayoutMode.SPLIT_V && layout.panels.length === 2) {
     const p1 = layout.panels[0];
     const p2 = layout.panels[1];
-    const s1 = sessions.find((s) => s.id === p1.id);
-    const s2 = sessions.find((s) => s.id === p2.id);
+    const s1 = sessionsMap.get(p1.id);
+    const s2 = sessionsMap.get(p2.id);
     if (!s1 || !s2) return null;
 
     return (
@@ -535,7 +550,7 @@ export function TerminalLayout({
           onDrop={handlePanelDrop}
         >
           {layout.panels.map((panel) => {
-            const session = sessions.find((s) => s.id === panel.id);
+            const session = sessionsMap.get(panel.id);
             if (!session) return null;
             const isDragSource = draggedId === panel.id;
             const isDropTarget = dropTargetId === panel.id;
@@ -585,6 +600,7 @@ export function TerminalLayout({
           })}
         </div>
       )}
+
     </div>
   );
 }

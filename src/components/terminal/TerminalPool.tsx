@@ -17,6 +17,8 @@ interface TerminalPoolProps {
   autoLaunchCommand?: string | null;
   /** Whether auto-exec permission is enabled */
   autoLaunchEnabled?: boolean;
+  /** Called when the active terminal session changes — used by the handoff panel */
+  onActiveSessionChange?: (id: string | null) => void;
 }
 
 /**
@@ -33,6 +35,7 @@ export function TerminalPool({
   onCloseSession,
   autoLaunchCommand,
   autoLaunchEnabled,
+  onActiveSessionChange,
 }: TerminalPoolProps) {
   return (
     <TerminalLayout
@@ -42,6 +45,7 @@ export function TerminalPool({
       onCloseSession={(id) => onCloseSession?.(id)}
       autoLaunchCommand={autoLaunchCommand}
       autoLaunchEnabled={autoLaunchEnabled}
+      onActiveSessionChange={onActiveSessionChange}
     />
   );
 }

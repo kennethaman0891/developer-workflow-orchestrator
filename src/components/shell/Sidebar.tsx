@@ -1,21 +1,22 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { isTauri } from '@/lib/tauri';
 
 type ViewId = 'workspace' | 'projects' | 'ide' | 'collaboration' | 'settings';
 
 interface SidebarProps {
   workspaces?: any[];
   activeId?: string;
-  setSidebarOpen?: (open: boolean) => void;
   setMainView?: (view: string) => void;
   currentView?: string;
   onCreateTerminal?: () => void;
   onOpenWizard?: () => void;
   onCloseWorkspace?: (id: string) => void;
   onActivateWorkspace?: (id: string) => void;
+  onOpenHandoff?: () => void;
 }
 
 const SECTION_LABEL_STYLE: React.CSSProperties = {
@@ -252,19 +253,24 @@ function WorkspaceItem({
 export function Sidebar({
   workspaces = [],
   activeId = '',
-  setSidebarOpen,
   setMainView,
   currentView = 'workspace',
   onCreateTerminal,
   onOpenWizard,
   onCloseWorkspace,
   onActivateWorkspace,
+  onOpenHandoff,
 }: SidebarProps) {
   const { theme } = useTheme();
   const { currentUser, signOut } = useAuth();
   const [newWsName, setNewWsName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [localView, setLocalView] = useState(currentView);
+
+  // Sync local nav highlight when the parent changes the real view
+  useEffect(() => {
+    setLocalView(currentView);
+  }, [currentView]);
 
   const handleNewWorkspace = () => {
     onOpenWizard?.();
@@ -341,55 +347,18 @@ export function Sidebar({
                 color: theme.colors.text,
                 letterSpacing: '0.02em',
                 lineHeight: 1.2,
+                display: 'flex',
+                alignItems: 'baseline',
+                gap: '4px',
               }}
             >
-              DWO
-            </div>
-            <div
-              style={{
-                fontSize: '10px',
-                color: theme.colors.textMuted,
-                letterSpacing: '0.01em',
-                lineHeight: 1.2,
-              }}
-            >
-              Developer Workflow
+              <span>DWO</span>
+              <span style={{ fontSize: '10px', fontWeight: 400, color: theme.colors.textMuted, letterSpacing: '0.01em' }}>
+                Developer Workflow
+              </span>
             </div>
           </div>
         </div>
-        {setSidebarOpen && (
-          <button
-            onClick={() => setSidebarOpen(false)}
-            style={{
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: '6px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderRadius: '6px',
-              color: theme.colors.textMuted,
-              transition: 'color 0.15s ease, background 0.15s ease, transform 0.15s ease',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.color = theme.colors.text;
-              e.currentTarget.style.background = theme.colors.bgTertiary;
-              e.currentTarget.style.transform = 'scale(1.05)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.color = theme.colors.textMuted;
-              e.currentTarget.style.background = 'none';
-              e.currentTarget.style.transform = 'scale(1)';
-            }}
-            title="Close sidebar"
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
-              <line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
-            </svg>
-          </button>
-        )}
       </div>
 
       {/* Navigation */}
@@ -664,6 +633,37 @@ export function Sidebar({
                 <polyline points="3,5 5,7 9,3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               New Terminal
+            </button>
+          </div>
+        )}
+
+        {/* Session Handoff button — Tauri desktop mode only */}
+        {isTauri() && onOpenHandoff && (
+          <div style={{ padding: '4px 12px 8px', flexShrink: 0 }}>
+            <button
+              onClick={onOpenHandoff}
+              title="Open Session Handoff"
+              style={{
+                width: '100%',
+                background: '#fbbf2418',
+                border: '1px solid #fbbf2455',
+                color: '#fbbf24',
+                borderRadius: '6px',
+                padding: '7px 12px',
+                fontSize: '12px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '7px',
+                letterSpacing: '0.01em',
+                fontFamily: 'inherit',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#fbbf2433'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = '#fbbf2418'; }}
+            >
+              ⚡ Session Handoff
             </button>
           </div>
         )}

@@ -191,7 +191,7 @@ export function MonacoEditor({ filePath, content, onChange, onSave, onStatus }: 
   const onSaveRef = useRef(onSave);
   const onStatusRef = useRef(onStatus);
 
-  const { fontSize, wordWrap } = useSettings();
+  const { fontSize, wordWrap, minimap } = useSettings();
   const { currentThemeKey } = useTheme();
 
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -287,7 +287,7 @@ export function MonacoEditor({ filePath, content, onChange, onSave, onStatus }: 
           automaticLayout: true,
           fontSize,
           wordWrap: wordWrap ? 'on' : 'off',
-          minimap: { enabled: true },
+          minimap: { enabled: minimap },
           scrollBeyondLastLine: false,
           renderLineHighlight: 'all',
           cursorBlinking: 'smooth',
@@ -446,8 +446,12 @@ export function MonacoEditor({ filePath, content, onChange, onSave, onStatus }: 
   // ── Settings changes ───────────────────────────────────────────────────────
   useEffect(() => {
     if (!editorReady) return;
-    editorRef.current?.updateOptions({ fontSize, wordWrap: wordWrap ? 'on' : 'off' });
-  }, [editorReady, fontSize, wordWrap]);
+    editorRef.current?.updateOptions({
+      fontSize,
+      wordWrap: wordWrap ? 'on' : 'off',
+      minimap: { enabled: minimap },
+    });
+  }, [editorReady, fontSize, wordWrap, minimap]);
 
   if (loadError) {
     return (
