@@ -302,6 +302,9 @@ export function ProjectsView({ onContinue, onDeleteWorkspace }: ProjectsViewProp
           position: 'fixed',
           bottom: '24px',
           right: '24px',
+          // Above the handoff panel (z 60) so New Workspace stays
+          // clickable when both are open; below the wizard modal (1000).
+          zIndex: 70,
           background: theme.colors.bgSecondary,
           border: `1px solid ${theme.colors.border}`,
           borderRadius: '8px',

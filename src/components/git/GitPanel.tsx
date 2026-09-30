@@ -52,10 +52,19 @@ export function GitPanel({ projectPath }: GitPanelProps) {
     });
   }, []);
 
+  const [commitError, setCommitError] = useState<string | null>(null);
+
   const handleSubmit = async () => {
     if (!commitMessage.trim()) return;
-    await commit(commitMessage);
-    setCommitMessage('');
+    setCommitError(null);
+    const result = await commit(commitMessage);
+    // Only clear the message on actual success — the old code wiped it even
+    // when git failed (e.g. missing user.name), losing the user's text.
+    if (result?.success) {
+      setCommitMessage('');
+    } else {
+      setCommitError(result?.message || 'Commit failed. Check git config and try again.');
+    }
   };
 
   const changedCount = status
@@ -311,6 +320,22 @@ export function GitPanel({ projectPath }: GitPanelProps) {
 
               {/* Commit input */}
               <div style={{ borderTop: `1px solid ${theme.colors.border}`, paddingTop: '8px' }}>
+                {commitError && (
+                  <div
+                    role="alert"
+                    style={{
+                      marginBottom: '6px',
+                      padding: '6px 8px',
+                      background: '#ff6b6b22',
+                      border: '1px solid #ff6b6b44',
+                      borderRadius: '4px',
+                      color: '#ff9999',
+                      fontSize: '11px',
+                    }}
+                  >
+                    {commitError}
+                  </div>
+                )}
                 <textarea
                   value={commitMessage}
                   onChange={e => setCommitMessage(e.target.value)}

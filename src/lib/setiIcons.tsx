@@ -15,8 +15,10 @@ import type { ReactNode } from 'react';
 
 const SETI_THEME = {
   blue: '#268bd2',      // Python, TypeScript, CSS, Markdown, JSON configs
-  grey: '#657b83',      // Default/generic files
-  'grey-light': '#839496', // Ignore files
+  // Brightened for dark backgrounds: upstream Solarized greys (#657b83 /
+  // #586e75) and dark ruby (#701516) are near-invisible on #0a0a0a–#1e1e1e.
+  grey: '#93a1a1',      // Default/generic files
+  'grey-light': '#adb8b8', // Ignore files
   green: '#859900',     // YAML, some config files
   orange: '#cb4b16',    // HTML, JSX
   pink: '#d33682',      // SCSS
@@ -24,7 +26,7 @@ const SETI_THEME = {
   red: '#dc322f',       // Ruby, tests
   white: '#fdf6e3',     // Standard text files
   yellow: '#b58900',    // JavaScript, JSON data files
-  ignore: '#586e75',    // .gitignore, dockerignore
+  ignore: '#8a9a9e',    // .gitignore, dockerignore
   // Additional color names referenced in definitions.json
   todo: '#e9d10c',      // TODO comments
   heroku: '#fc641d',    // Heroku
@@ -32,7 +34,7 @@ const SETI_THEME = {
   license: '#f6b737',   // License files
   gulp: '#eb4a4b',      // Gulp
   docker: '#0db7ed',    // Docker
-  ruby: '#701516',      // Ruby (explicit override)
+  ruby: '#e06c75',      // Ruby (brightened for dark backgrounds)
   hex: '#9876aa',       // Hex/color files
 } as const;
 
@@ -50,18 +52,45 @@ function themedIcon(fileName: string): { svg: string; color: string } {
 
 // ── Helper: Render SVG string to React node safely ────────────────────────────
 
+/**
+ * Strip executable / event-handler content from third-party SVGs before
+ * injecting via dangerouslySetInnerHTML. Filenames are lookup-only (never
+ * interpolated), so this is defense-in-depth against a compromised icon pack.
+ */
+function sanitizeSvg(svg: string): string {
+  return svg
+    .replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/href\s*=\s*"(?!#)[^"]*"/gi, 'href="#"')
+    .replace(/href\s*=\s*'(?!#)[^']*'/gi, "href='#'");
+}
+
 /** Convert SVG string to a React element with proper sizing and color */
 function svgToReact(svgString: string, color: string, size: number): ReactNode {
   // Inject fill as an attribute (not inline style) so it always wins over any
-  // inherited CSS `color` / `fill` rules. We replace only the opening <svg tag
-  // and add fill + explicit width/height attributes.
+  // inherited CSS `color` / `fill` rules. Match `<svg`, `<svg ` and `<svg\n`
+  // so upstream formatting changes can't slip through unsized.
   const attrs = `fill="${color}" width="${size}" height="${size}"`;
-  const cleanSvg = svgString.replace(/<svg /, `<svg ${attrs} `);
+  const sized = /<svg[\s>]/.test(svgString)
+    ? svgString.replace(/<svg([\s>])/, `<svg ${attrs}$1`)
+    : svgString;
+  // Clamp the wrapper so a bad upstream size can't shift tab/tree layout.
+  const cleanSvg = sanitizeSvg(sized);
 
   return (
     <span
       dangerouslySetInnerHTML={{ __html: cleanSvg }}
-      style={{ display: 'inline-block', verticalAlign: 'middle', lineHeight: 1 }}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        verticalAlign: 'middle',
+        lineHeight: 1,
+        width: size,
+        height: size,
+        flexShrink: 0,
+        overflow: 'hidden',
+      }}
     />
   );
 }
@@ -90,15 +119,12 @@ export interface FolderIconProps {
 }
 
 /**
- * Seti UI folder icon.
- * Closed folders use the 'folder' icon (white/teal).
- * Open folders also use 'folder' but visually distinct via context.
+ * Seti UI folder icon. Open folders render brighter so open/closed states
+ * are distinguishable in the file tree.
  */
 export function FolderIcon({ expanded = false, size = 14 }: FolderIconProps) {
-  // Both closed and open folders use the same 'folder' icon in Seti UI
-  // The visual distinction comes from color (closed = teal, open = blue)
-  const { svg, color } = themedIcon('folder');
-  return svgToReact(svg, color, size);
+  const { svg } = themedIcon('folder');
+  return svgToReact(svg, expanded ? '#4a9eff' : '#839496', size);
 }
 
 export interface ChevronProps {

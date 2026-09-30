@@ -38,10 +38,13 @@ export function WorkspaceView({
   name,
   subtitle,
   layoutKey,
-  accent = '#4a9eff',
+  accent,
 }: WorkspaceViewProps) {
   const { theme } = useTheme();
   const { sessions, close } = useTerminals();
+  // Default to the ACTIVE theme accent so the identity dot follows theme
+  // switches instead of staying dark-theme blue in seti/midnight/ocean/carbon.
+  const resolvedAccent = accent ?? theme.colors.accent;
 
   const headerStyle = useMemo(
     () => ({
@@ -68,7 +71,7 @@ export function WorkspaceView({
     >
       {/* ── Workspace header ───────────────────────────────────────────── */}
       <header style={headerStyle}>
-        <span title="active" style={statusDot(accent)} />
+        <span title="active" style={statusDot(resolvedAccent)} />
         <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           <span
             style={{

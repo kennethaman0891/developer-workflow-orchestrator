@@ -269,6 +269,8 @@ export function IDEView({ initialPath }: IDEViewProps) {
   const {
     openFiles,
     activeFilePath,
+    fileError,
+    clearFileError,
     addFile,
     closeFile,
     saveFile,
@@ -288,6 +290,19 @@ export function IDEView({ initialPath }: IDEViewProps) {
   const [isPicking, setIsPicking] = useState(false);
   // Bumped by the debounced `file-changed` listener to re-read the file tree.
   const [treeRefreshToken, setTreeRefreshToken] = useState(0);
+  // Follow workspace switches: when the parent's initialPath changes (active
+  // workspace switched), move the root along — unless the user manually
+  // picked a different folder, which always wins.
+  const userPickedRef = useRef(false);
+  const prevInitialPathRef = useRef(initialPath || '');
+  useEffect(() => {
+    const next = initialPath || '';
+    const prev = prevInitialPathRef.current;
+    prevInitialPathRef.current = next;
+    if (next !== prev && !userPickedRef.current) {
+      setCurrentRootPath(next);
+    }
+  }, [initialPath]);
 
   // Watch the current root for external changes; unwatch it when the root
   // changes or the view unmounts. The `null` fallback keeps web mode quiet —
@@ -359,6 +374,7 @@ export function IDEView({ initialPath }: IDEViewProps) {
     try {
       const path = await pickFolder();
       if (path) {
+        userPickedRef.current = true;
         setCurrentRootPath(path);
       }
     } catch (error) {
@@ -378,20 +394,24 @@ export function IDEView({ initialPath }: IDEViewProps) {
     setActiveFilePath(path);
   }, [setActiveFilePath]);
 
-  // Handle tab close
-  const handleTabClose = useCallback(async (path: string) => {
-    const file = openFiles.get(path);
-    if (file?.dirty) {
-      try {
-        await saveFile(path, file.content);
-      } catch (error) {
-        console.error('Failed to auto-save before close:', error);
+  // Handle tab close. A dirty tab is auto-saved first — but if the save
+  // FAILS the tab stays open so edits are never silently dropped.
+  const handleTabClose = useCallback(
+    async (path: string) => {
+      const file = openFiles.get(path);
+      if (file?.dirty) {
+        try {
+          await saveFile(path, file.content);
+        } catch {
+          return;
+        }
       }
-    }
-    closeFile(path);
-    // Release the cached Monaco model so a later reopen re-reads from disk.
-    disposeEditorModel(path);
-  }, [openFiles, saveFile, closeFile]);
+      closeFile(path);
+      // Release the cached Monaco model so a later reopen re-reads from disk.
+      disposeEditorModel(path);
+    },
+    [openFiles, saveFile, closeFile],
+  );
 
   // Build tabs array
   const tabs: Tab[] = Array.from(openFiles.values()).map(file => ({
@@ -610,6 +630,41 @@ export function IDEView({ initialPath }: IDEViewProps) {
             onTabClick={handleTabClick}
             onTabClose={handleTabClose}
           />
+        )}
+
+        {/* File open/save failure banner */}
+        {fileError && (
+          <div
+            role="alert"
+            style={{
+              padding: '6px 12px',
+              background: '#ff6b6b22',
+              borderBottom: '1px solid #ff6b6b44',
+              color: '#ff9999',
+              fontSize: '11px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              flexShrink: 0,
+            }}
+          >
+            <span style={{ flex: 1 }}>⚠️ {fileError}</span>
+            <button
+              type="button"
+              onClick={clearFileError}
+              style={{
+                background: 'transparent',
+                border: '1px solid #ff6b6b44',
+                color: '#ff9999',
+                borderRadius: '3px',
+                cursor: 'pointer',
+                fontSize: '11px',
+                padding: '2px 8px',
+              }}
+            >
+              Dismiss
+            </button>
+          </div>
         )}
 
         {/* Editor Area */}

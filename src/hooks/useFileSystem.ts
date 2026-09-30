@@ -59,10 +59,18 @@ export function useFileSystem() {
     return invoke<string[]>('search', { pattern, path }, []);
   }, []);
 
-  // Load home directory on mount
+  // NOTE: the old code called require('os').homedir() here — `require` does
+  // not exist in the browser/static-export bundle and threw ReferenceError,
+  // leaving any FileTree mount permanently blank. Home resolution now goes
+  // through the backend (get_home) with a static fallback.
   useEffect(() => {
-    const home = require('os').homedir();
-    list(home).catch(console.error);
+    invoke<string | null>('get_home', undefined, null)
+      .then((home) => {
+        list(home || '/').catch(console.error);
+      })
+      .catch(() => {
+        list('/').catch(console.error);
+      });
   }, [list]);
 
   return {

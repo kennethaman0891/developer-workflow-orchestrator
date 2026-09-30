@@ -61,7 +61,7 @@ function AppShell() {
     load: loadWorkspaces,
     close: closeWs,
   } = useWorkspaces();
-  const { sessions, create: createTerminal, close: closeTerminal, list: listTerminals } = useTerminals();
+  const { sessions, create: createTerminal, close: closeTerminal, list: listTerminals, error: terminalError, clearError: clearTerminalError } = useTerminals();
 
   // Get the active workspace object
   const activeWorkspace = activeId ? workspaces.find(w => w.id === activeId) : null;
@@ -102,12 +102,14 @@ function AppShell() {
   const createTerminalForWorkspace = useCallback(async (): Promise<string | null> => {
     const cwd = activeWorkspace?.path || undefined;
     const wsId = activeWorkspace?.id || undefined;
-    const id = await terminalCreate({ cwd, workspaceId: wsId });
-    if (id) {
-      await listTerminals();
+    try {
+      // Routed through the hook (not the raw lib call) so failures land in
+      // the shared error state and render as a banner instead of a dead button.
+      return await createTerminal(cwd, wsId);
+    } catch {
+      return null;
     }
-    return id;
-  }, [activeWorkspace?.path, activeWorkspace?.id, listTerminals]);
+  }, [activeWorkspace?.path, activeWorkspace?.id, createTerminal]);
 
   // ── App open: hydrate state, handle launch-cwd, auto-create default ────────
   // NOTE: `loadWorkspaces()` returns the fresh list — do NOT read `workspaces`
@@ -181,16 +183,20 @@ function AppShell() {
 
   return (
     <>
-    <div style={{
-      height: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
-      background: 'var(--dwo-color-bg, #0a0a0a)',
-      color: 'var(--dwo-color-text, #e8e8e8)',
-      fontFamily: 'var(--dwo-font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif)',
-      overflow: 'hidden',
-      transition: 'background 0.2s, color 0.2s',
-    }}>
+    <div
+      style={{
+        // dvh tracks Tauri window chrome/resize; vh fallback for older WebViews.
+        height: '100vh',
+        minHeight: '100dvh',
+        display: 'flex',
+        flexDirection: 'column',
+        background: 'var(--dwo-color-bg, #1e1e1e)',
+        color: 'var(--dwo-color-text, #f8f8f2)',
+        fontFamily: 'var(--dwo-font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif)',
+        overflow: 'hidden',
+        transition: 'background 0.2s, color 0.2s',
+      }}
+    >
       {/* Top strip — holds the sidebar toggle IN-FLOW so it can never
           overlap sidebar or terminal content (replaces the old fixed button) */}
       <div style={{
@@ -241,20 +247,25 @@ function AppShell() {
       </div>
 
       {/* Phase 5: Diagnostics/Error Reporting */}
-      <ErrorReporter />
+      <ErrorBoundary label="Diagnostics">
+        <ErrorReporter />
+      </ErrorBoundary>
 
       {/* New Workspace Wizard (Cmd+T) */}
       {showWizard && (
-        <WizardView
-          onClose={() => setShowWizard(false)}
-          onCreated={() => setMainView('workspace')}
-        />
+        <ErrorBoundary label="Workspace wizard">
+          <WizardView
+            onClose={() => setShowWizard(false)}
+            onCreated={() => setMainView('workspace')}
+          />
+        </ErrorBoundary>
       )}
 
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
         {/* Left sidebar */}
         {sidebarOpen && (
-          <Sidebar
+          <ErrorBoundary label="Sidebar">
+            <Sidebar
             workspaces={workspaces}
             activeId={activeId || ''}
             setMainView={(v: string) => setMainView(v as MainView)}
@@ -264,7 +275,10 @@ function AppShell() {
             onCloseWorkspace={handleCloseWorkspace}
             onActivateWorkspace={activateWs}
             onOpenHandoff={() => setHandoffOpen(true)}
-          />
+            sidebarOpen={sidebarOpen}
+            onSidebarToggle={() => setSidebarOpen((open) => !open)}
+            />
+          </ErrorBoundary>
         )}
 
         {/* Main content area */}
@@ -277,37 +291,55 @@ function AppShell() {
         }}>
           {/* Phase 1: Projects View */}
           {mainView === 'projects' && (
-            <ProjectsView
-              onContinue={(id) => {
-                activateWs(id);
-                setMainView('workspace');
-              }}
-              onDeleteWorkspace={handleCloseWorkspace}
-            />
+            <ErrorBoundary label="Projects">
+              <ProjectsView
+                onContinue={(id) => {
+                  activateWs(id);
+                  setMainView('workspace');
+                }}
+                onDeleteWorkspace={handleCloseWorkspace}
+              />
+            </ErrorBoundary>
           )}
 
           {/* Phase 10: Collaboration View */}
-          {mainView === 'collaboration' && <CollaborationPanel />}
+          {mainView === 'collaboration' && (
+            <ErrorBoundary label="Collaboration">
+              <CollaborationPanel />
+            </ErrorBoundary>
+          )}
 
           {/* Phase 6: Settings View */}
-          {mainView === 'settings' && <SettingsPanel />}
+          {mainView === 'settings' && (
+            <ErrorBoundary label="Settings">
+              <SettingsPanel />
+            </ErrorBoundary>
+          )}
 
           {/* Phase 0/1: Terminal Views — always mounted to preserve state across tab switches */}
-          <div style={{
-            display: (mainView === 'workspace' || mainView === 'grid') ? 'flex' : 'none',
-            flex: 1,
-            overflow: 'hidden',
-          }}>
-            <TerminalPool
-              sessions={activeSessions}
-              layoutKey={activeId ? `dwo-layout-${activeId}` : undefined}
-              onCreateTerminal={createTerminalForWorkspace}
-              onCloseSession={(id) => closeTerminal(id)}
-              autoLaunchCommand={activeWorkspace?.command}
-              autoLaunchEnabled={true}
-              onAutoLaunched={() => { void listTerminals(); }}
-              onActiveSessionChange={setActiveTerminalId}
-            />
+          <div
+            style={{
+              display: mainView === 'workspace' || mainView === 'grid' ? 'flex' : 'none',
+              flex: 1,
+              overflow: 'hidden',
+            }}
+          >
+            <ErrorBoundary label="Terminals">
+              <TerminalPool
+                sessions={activeSessions}
+                layoutKey={activeId ? `dwo-layout-${activeId}` : undefined}
+                onCreateTerminal={createTerminalForWorkspace}
+                onCloseSession={(id) => closeTerminal(id)}
+                autoLaunchCommand={activeWorkspace?.command}
+                autoLaunchEnabled={true}
+                onAutoLaunched={() => {
+                  void listTerminals();
+                }}
+                onActiveSessionChange={setActiveTerminalId}
+                backendError={terminalError}
+                onClearBackendError={clearTerminalError}
+              />
+            </ErrorBoundary>
           </div>
 
           {/* Phase 7: IDE View — kept mounted so tabs and editor state survive view switches */}
@@ -322,11 +354,13 @@ function AppShell() {
 
     {/* Session handoff panel — app-level overlay, triggered from the sidebar */}
     {handoffOpen && (
-      <HandoffPanel
-        sessions={sessions}
-        activeId={activeTerminalId}
-        onClose={() => setHandoffOpen(false)}
-      />
+      <ErrorBoundary label="Session handoff">
+        <HandoffPanel
+          sessions={sessions}
+          activeId={activeTerminalId}
+          onClose={() => setHandoffOpen(false)}
+        />
+      </ErrorBoundary>
     )}
   </>
   );

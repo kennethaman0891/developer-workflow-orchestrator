@@ -24,6 +24,10 @@ interface TerminalPoolProps {
   onAutoLaunched?: () => void;
   /** Called when the active terminal session changes — used by the handoff panel */
   onActiveSessionChange?: (id: string | null) => void;
+  /** Last backend failure from useTerminals() — shown instead of a false empty state */
+  backendError?: string | null;
+  /** Dismiss the backend error banner */
+  onClearBackendError?: () => void;
 }
 
 /**
@@ -42,6 +46,8 @@ export function TerminalPool({
   autoLaunchEnabled,
   onAutoLaunched,
   onActiveSessionChange,
+  backendError,
+  onClearBackendError,
 }: TerminalPoolProps) {
   return (
     <TerminalLayout
@@ -53,6 +59,8 @@ export function TerminalPool({
       autoLaunchEnabled={autoLaunchEnabled}
       onAutoLaunched={onAutoLaunched}
       onActiveSessionChange={onActiveSessionChange}
+      backendError={backendError}
+      onClearBackendError={onClearBackendError}
     />
   );
 }

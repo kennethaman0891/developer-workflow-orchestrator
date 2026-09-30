@@ -16,8 +16,9 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import type { SessionMeta } from '@/hooks/useTerminals';
 import { useTerminalLayout } from '@/hooks/useTerminalLayout';
 import { useAutoLaunch, type PaneDimensions } from '@/hooks/useAutoLaunch';
-import { getTerminalDims, waitForTerminalDims, forgetTerminalDims } from '@/lib/terminalDims';
+import { getTerminalDims, waitForTerminalDims, forgetTerminalDims, msSinceInput } from '@/lib/terminalDims';
 import { useSettings } from '@/contexts/SettingsContext';
+import { useTheme } from '@/contexts/ThemeContext';
 import { TerminalPanel } from './TerminalPanel';
 
 enum LayoutMode {
@@ -104,7 +105,7 @@ function VDivider({ pos, onPosChange }: VDividerProps) {
       style={{
         height: '6px',
         cursor: 'row-resize',
-        background: '#2a2a2a',
+        background: 'var(--dwo-color-border, #2a2a2a)',
         flexShrink: 0,
         transition: 'background 0.15s',
       }}
@@ -165,7 +166,7 @@ function HDivider({ pos, onPosChange }: HDividerProps) {
       style={{
         width: '6px',
         cursor: 'col-resize',
-        background: '#2a2a2a',
+        background: 'var(--dwo-color-border, #2a2a2a)',
         flexShrink: 0,
         transition: 'background 0.15s',
       }}
@@ -196,6 +197,10 @@ interface TerminalLayoutProps {
   onAutoLaunched?: () => void;
   /** Called when the active terminal changes — used by the handoff panel at app level */
   onActiveSessionChange?: (id: string | null) => void;
+  /** Last backend failure — rendered as a banner instead of a false empty state */
+  backendError?: string | null;
+  /** Dismiss the backend error banner */
+  onClearBackendError?: () => void;
 }
 
 export function TerminalLayout({
@@ -208,6 +213,8 @@ export function TerminalLayout({
   autoLaunchEnabled,
   onAutoLaunched,
   onActiveSessionChange,
+  backendError,
+  onClearBackendError,
 }: TerminalLayoutProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   // Sync the active session id upward so the app-level HandoffPanel always
@@ -218,6 +225,7 @@ export function TerminalLayout({
 
   const {
     layout,
+    layoutLoaded,
     syncActiveFromSessions,
     syncPanels,
     removePanel,
@@ -230,6 +238,17 @@ export function TerminalLayout({
   // Real xterm font size — used for the auto-launch pre-resize estimate so
   // the PTY is sized with the same metrics the terminal actually fits with.
   const { fontSize } = useSettings();
+  // Terminal chrome follows the active theme instead of hardcoded dark values.
+  const { theme } = useTheme();
+  const chrome = {
+    containerBg: theme.colors.bg,
+    toolbarBg: theme.colors.bgSecondary,
+    border: theme.colors.border,
+    accent: theme.colors.accent,
+    text: theme.colors.text,
+    textMuted: theme.colors.textMuted,
+    panelBg: theme.colors.bgTertiary,
+  };
 
   const gridContainerRef = useRef<HTMLDivElement>(null);
 
@@ -262,6 +281,16 @@ export function TerminalLayout({
       // Wait for xterm instances to report their actually-fitted dimensions.
       await waitForTerminalDims(sessionIds, 2000);
 
+      // Don't inject the command into a prompt the user is actively typing
+      // in — defer once (up to 3s) so keystrokes and send_command can't
+      // interleave into a garbled line. After the grace window we proceed so
+      // a held key can never block the launch forever.
+      const TYPING_QUIET_MS = 1500;
+      const allQuiet = () => sessionIds.every((id) => msSinceInput(id) > TYPING_QUIET_MS);
+      if (!allQuiet()) {
+        await new Promise((r) => setTimeout(r, 3000));
+      }
+
       const container = gridContainerRef.current;
       const dimensions: PaneDimensions[] = [];
       for (const s of sessions) {
@@ -275,7 +304,11 @@ export function TerminalLayout({
         // actually visible. A 0×0 measurement (maximized sibling under
         // display:none, or split modes where the grid container is unmounted)
         // used to floor to 160×80px → a 20×5 PTY right before the CLI launch.
-        const panelEl = container?.querySelector(`[data-panel-id="${s.id}"]`) as HTMLElement | null;
+        // Maximized placeholders carry aria-hidden + no TerminalPanel, so the
+        // :not() selector can never resolve to one of them.
+        const panelEl = container?.querySelector(
+          `[data-panel-id="${s.id}"]:not([aria-hidden="true"])`,
+        ) as HTMLElement | null;
         if (panelEl) {
           const panelRect = panelEl.getBoundingClientRect();
           if (panelRect.width > 0 && panelRect.height > 0) {
@@ -306,14 +339,33 @@ export function TerminalLayout({
   }, [sessions, autoLaunchCommand, autoLaunchEnabled, autoLaunch, preResizePanes, computePtyDimensions, fontSize, onAutoLaunched]);
 
   // ── TUI auto-expand: maximize when any session enters TUI mode ─────────
-  // Fires at most once per session (autoMaxRef) so manually restoring a
-  // panel is not immediately re-maximized on a later sessions re-list.
+  // Truce rules: fires at most once per session (autoMaxRef) so a manual
+  // restore is never re-stolen on a later re-list; when OUR auto-maximized
+  // session exits TUI mode the layout restores itself instead of leaving the
+  // user stuck maximized. Closed sessions are pruned to bound growth.
   const autoMaxRef = useRef<Set<string>>(new Set());
+  const autoMaxIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!sessions || sessions.length === 0) return;
+    const liveIds = new Set(sessions.map((s) => s.id));
+    for (const id of Array.from(autoMaxRef.current)) {
+      if (!liveIds.has(id)) autoMaxRef.current.delete(id);
+    }
+    // Our auto-maximized session left TUI mode → give the grid back.
+    if (autoMaxIdRef.current) {
+      const auto = sessions.find((s) => s.id === autoMaxIdRef.current);
+      if (!auto) {
+        autoMaxIdRef.current = null;
+      } else if (!auto.is_tui && maximizedId === auto.id) {
+        autoMaxIdRef.current = null;
+        setMaximizedId(null);
+        return;
+      }
+    }
     const tuiSession = sessions.find((s) => s.is_tui && !autoMaxRef.current.has(s.id));
     if (tuiSession && maximizedId !== tuiSession.id) {
       autoMaxRef.current.add(tuiSession.id);
+      autoMaxIdRef.current = tuiSession.id;
       setMaximizedId(tuiSession.id);
       prevModeRef.current = layout.mode;
     }
@@ -394,11 +446,45 @@ export function TerminalLayout({
   // ── Render: empty state ───────────────────────────────────────────────────
   if (!sessions || sessions.length === 0) {
     return (
-      <div data-split-container="true" style={containerStyle}>
+      <div data-split-container="true" style={{ ...containerStyle, background: chrome.containerBg }}>
+        {backendError && (
+          <div
+            role="alert"
+            style={{
+              padding: '8px 12px',
+              background: '#ff6b6b22',
+              borderBottom: '1px solid #ff6b6b44',
+              color: '#ff9999',
+              fontSize: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+            }}
+          >
+            <span style={{ flex: 1 }}>⚠️ Terminal backend error: {backendError}</span>
+            <button
+              type="button"
+              onClick={onClearBackendError}
+              style={{
+                background: 'transparent',
+                border: '1px solid #ff6b6b44',
+                color: '#ff9999',
+                borderRadius: '3px',
+                cursor: 'pointer',
+                fontSize: '11px',
+                padding: '2px 8px',
+              }}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
         <div style={emptyStyle}>
           <div style={{ fontSize: '28px', marginBottom: '8px' }}>⌘</div>
-          <div style={{ color: '#888', fontSize: '14px' }}>No terminals yet</div>
-          <button onClick={handleCreate} style={{ ...createBtnStyle, marginTop: '12px' }}>
+          <div style={{ color: chrome.textMuted, fontSize: '14px' }}>
+            {backendError ? 'Terminals unavailable' : 'No terminals yet'}
+          </div>
+          <button onClick={handleCreate} style={{ ...createBtnStyle, background: chrome.accent, marginTop: '12px' }}>
             + Terminal
           </button>
         </div>
@@ -407,7 +493,19 @@ export function TerminalLayout({
   }
 
   // Filter panels to only those that actually exist in the current sessions
-  const validPanels = layout.panels.filter((p) => sessionsMap.has(p.id));
+  const validPanels = layoutLoaded ? layout.panels.filter((p) => sessionsMap.has(p.id)) : [];
+
+  // Layout still restoring from storage — never flash a false empty state or
+  // a half-built grid while sessions already exist.
+  if (!layoutLoaded && sessions && sessions.length > 0) {
+    return (
+      <div data-split-container="true" style={{ ...containerStyle, background: chrome.containerBg }}>
+        <div style={emptyStyle}>
+          <div style={{ color: chrome.textMuted, fontSize: '13px' }}>Restoring layout…</div>
+        </div>
+      </div>
+    );
+  }
 
   // ── Render: split-h (exactly 2 panels side-by-side with draggable divider) ──
   // Falls through to grid mode if a panel is maximized, or for 0, 1, or 3+ panels.
@@ -416,7 +514,17 @@ export function TerminalLayout({
     const p2 = validPanels[1];
     const s1 = sessionsMap.get(p1.id);
     const s2 = sessionsMap.get(p2.id);
-    if (!s1 || !s2) return null;
+    // Sessions and panels raced (template creation, crash recovery): show a
+    // brief syncing state instead of a black rectangle.
+    if (!s1 || !s2) {
+      return (
+        <div data-split-container="true" style={{ ...containerStyle, background: chrome.containerBg }}>
+          <div style={emptyStyle}>
+            <div style={{ color: chrome.textMuted, fontSize: '13px' }}>Syncing terminals…</div>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div data-split-container="true" style={{ ...containerStyle, flexDirection: 'row' }}>
@@ -458,7 +566,17 @@ export function TerminalLayout({
     const p2 = validPanels[1];
     const s1 = sessionsMap.get(p1.id);
     const s2 = sessionsMap.get(p2.id);
-    if (!s1 || !s2) return null;
+    // Sessions and panels raced (template creation, crash recovery): show a
+    // brief syncing state instead of a black rectangle.
+    if (!s1 || !s2) {
+      return (
+        <div data-split-container="true" style={{ ...containerStyle, background: chrome.containerBg }}>
+          <div style={emptyStyle}>
+            <div style={{ color: chrome.textMuted, fontSize: '13px' }}>Syncing terminals…</div>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div data-split-container="true" style={{ ...containerStyle, flexDirection: 'column' }}>
@@ -514,17 +632,26 @@ export function TerminalLayout({
   const totalRows = maximizedId ? 1 : Math.max(1, maxRow);
 
   return (
-    <div data-split-container="true" style={containerStyle}>
+    <div
+      data-split-container="true"
+      style={{ ...containerStyle, background: chrome.containerBg }}
+    >
       {/* Toolbar */}
-      <div style={toolbarStyle}>
+      <div
+        style={{
+          ...toolbarStyle,
+          background: chrome.toolbarBg,
+          borderBottom: `1px solid ${chrome.border}`,
+        }}
+      >
         {maximizedId && (
           <button
             onClick={() => setMaximizedId(null)}
             style={{
               ...createBtnStyle,
-              background: '#2a2a2a',
-              color: '#e8e8e8',
-              border: '1px solid #3a3a3a',
+              background: chrome.panelBg,
+              color: chrome.text,
+              border: `1px solid ${chrome.border}`,
               marginRight: '8px',
             }}
           >
@@ -532,31 +659,31 @@ export function TerminalLayout({
           </button>
         )}
 
-        <div style={modeGroupStyle}>
+        <div style={{ ...modeGroupStyle, background: chrome.panelBg }}>
           <button
             onClick={() => setMode(LayoutMode.GRID)}
-            style={modeBtnStyle(layout.mode === LayoutMode.GRID)}
+            style={modeBtnStyle(layout.mode === LayoutMode.GRID, chrome.accent, chrome.textMuted)}
             title="Grid layout"
           >
             <GridIcon />
           </button>
           <button
             onClick={() => setMode(LayoutMode.SPLIT_H)}
-            style={modeBtnStyle(layout.mode === LayoutMode.SPLIT_H)}
+            style={modeBtnStyle(layout.mode === LayoutMode.SPLIT_H, chrome.accent, chrome.textMuted)}
             title="Side-by-side split"
           >
             <SplitHIcon />
           </button>
           <button
             onClick={() => setMode(LayoutMode.SPLIT_V)}
-            style={modeBtnStyle(layout.mode === LayoutMode.SPLIT_V)}
+            style={modeBtnStyle(layout.mode === LayoutMode.SPLIT_V, chrome.accent, chrome.textMuted)}
             title="Stacked split"
           >
             <SplitVIcon />
           </button>
         </div>
 
-        <span style={countStyle}>
+        <span style={{ ...countStyle, color: chrome.textMuted }}>
           {(sessions?.length ?? 0)} terminal{(sessions?.length ?? 0) !== 1 ? 's' : ''}
         </span>
       </div>
@@ -565,8 +692,8 @@ export function TerminalLayout({
       {layout.panels.length === 0 ? (
         <div style={emptyStyle}>
           <div style={{ fontSize: '28px', marginBottom: '8px' }}>⌘</div>
-          <div style={{ color: '#888', fontSize: '14px' }}>No terminals yet</div>
-          <button onClick={handleCreate} style={{ ...createBtnStyle, marginTop: '12px' }}>
+          <div style={{ color: chrome.textMuted, fontSize: '14px' }}>No terminals yet</div>
+          <button onClick={handleCreate} style={{ ...createBtnStyle, background: chrome.accent, marginTop: '12px' }}>
             + Terminal
           </button>
         </div>
@@ -625,7 +752,7 @@ export function TerminalLayout({
                   gridColumn: isMaximized ? '1' : `${panel.col + 1} / span ${panel.spanCol}`,
                   gridRow: isMaximized ? '1' : `${panel.row + 1} / span ${panel.spanRow}`,
                   opacity: isDragSource ? 0.4 : 1,
-                  outline: isDropTarget ? '2px dashed #4a9eff' : 'none',
+                  outline: isDropTarget ? `2px dashed ${chrome.accent}` : 'none',
                   outlineOffset: '-2px',
                   borderRadius: '10px',
                   overflow: 'hidden',
@@ -743,18 +870,18 @@ const restoreBtnStyle: React.CSSProperties = {
   fontSize: '12px',
 };
 
-function modeBtnStyle(active: boolean): React.CSSProperties {
+function modeBtnStyle(active: boolean, accent: string, muted: string): React.CSSProperties {
   return {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     width: '28px',
     height: '28px',
-    background: active ? '#4a9eff33' : 'transparent',
-    border: active ? '1px solid #4a9eff66' : '1px solid transparent',
+    background: active ? `${accent}33` : 'transparent',
+    border: active ? `1px solid ${accent}66` : '1px solid transparent',
     borderRadius: '3px',
     cursor: 'pointer',
-    color: active ? '#4a9eff' : '#888',
+    color: active ? accent : muted,
     transition: 'all 0.15s',
   };
 }

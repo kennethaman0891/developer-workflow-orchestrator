@@ -15,6 +15,26 @@ export interface PtyDims {
 
 const dims = new Map<string, PtyDims>();
 
+/** Last user-input timestamps per session (ms epoch), for launch coordination. */
+const lastInput = new Map<string, number>();
+
+/** Record user keystrokes — auto-launch defers while the user is typing. */
+export function reportInputActivity(id: string): void {
+  if (!id) return;
+  lastInput.set(id, Date.now());
+}
+
+/** Ms since last input for a session (Infinity when never). */
+export function msSinceInput(id: string): number {
+  const t = lastInput.get(id);
+  return t === undefined ? Infinity : Date.now() - t;
+}
+
+/** Forget a session's input record (call on session close). */
+export function forgetInputActivity(id: string): void {
+  lastInput.delete(id);
+}
+
 /** Record the fitted dimensions of a session's xterm instance. */
 export function reportTerminalDims(id: string, cols: number, rows: number): void {
   if (!id || cols <= 0 || rows <= 0) return;
@@ -47,4 +67,5 @@ export function waitForTerminalDims(ids: string[], timeoutMs = 2000): Promise<vo
 /** Forget a session's dims (call on session close). */
 export function forgetTerminalDims(id: string): void {
   dims.delete(id);
+  forgetInputActivity(id);
 }

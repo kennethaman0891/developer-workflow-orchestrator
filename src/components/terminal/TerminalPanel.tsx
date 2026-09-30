@@ -17,6 +17,7 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { TerminalAnchor } from './TerminalAnchor';
 import { useSettings } from '@/contexts/SettingsContext';
+import { useTheme } from '@/contexts/ThemeContext';
 
 export interface PanelProps {
   id: string;
@@ -60,6 +61,15 @@ export function TerminalPanel({
 
   // Pull transparency from global settings so every terminal respects the user's choice
   const { transparency } = useSettings();
+  const { theme } = useTheme();
+
+  /** Hex #rrggbb → rgba() with the transparency alpha applied. */
+  const withAlpha = (hex: string, alpha: number): string => {
+    const m = hex.trim().match(/^#([0-9a-f]{6})$/i);
+    if (!m) return hex;
+    const n = parseInt(m[1], 16);
+    return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+  };
 
   // ── Resize handle (updates grid spans, not CSS dimensions) ──────────────
 
@@ -109,11 +119,13 @@ export function TerminalPanel({
     };
   }, [resizeStart, onResize, gridContainerRef, gridCols, gridRows, currentSpan]);
 
-  // Convert 0-100 transparency to alpha: 0 → fully opaque, 100 → fully transparent
+  // Convert 0-100 transparency to alpha: 0 → fully opaque, 100 → fully transparent.
+  // Bases come from the active theme (not hardcoded dark values) so the panel
+  // blends in midnight/ocean/carbon/seti instead of only dark.
   const bgAlpha = Math.max(0, 1 - transparency / 100);
-  const bgColor = isActive ? `rgba(26, 26, 46, ${bgAlpha})` : `rgba(13, 13, 13, ${bgAlpha})`;
-  const borderColor = isActive ? '#4a9eff' : '#2a2a2a';
-  const headerBg = isActive ? `rgba(21, 21, 37, ${bgAlpha})` : `rgba(17, 17, 17, ${bgAlpha})`;
+  const bgColor = withAlpha(isActive ? theme.colors.bgTertiary : theme.colors.bg, bgAlpha);
+  const borderColor = isActive ? theme.colors.accent : theme.colors.border;
+  const headerBg = withAlpha(theme.colors.bgSecondary, bgAlpha);
 
   return (
     <div
@@ -129,7 +141,7 @@ export function TerminalPanel({
         background: bgColor,
         cursor: 'default',
         transition: 'border-color 0.15s, box-shadow 0.15s, background 0.2s',
-        boxShadow: isActive ? '0 0 0 1px #4a9eff44, 0 4px 12px rgba(0,0,0,0.4)' : 'none',
+        boxShadow: isActive ? `0 0 0 1px ${theme.colors.accent}44, 0 4px 12px rgba(0,0,0,0.4)` : 'none',
         position: 'relative',
         minWidth: 0,
         minHeight: 0,
@@ -160,14 +172,14 @@ export function TerminalPanel({
               width: '6px',
               height: '6px',
               borderRadius: '50%',
-              background: visible ? '#4ade80' : '#666',
+              background: visible ? theme.colors.success : theme.colors.textMuted,
               flexShrink: 0,
             }}
           />
           <span
             style={{
               fontSize: '12px',
-              color: '#e8e8e8',
+              color: theme.colors.text,
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
@@ -180,14 +192,14 @@ export function TerminalPanel({
           <button
             onClick={(e) => { e.stopPropagation(); onMaximize(); }}
             title={isMaximized ? "Restore" : "Maximize"}
-            style={btnStyle('#4a9eff')}
+            style={btnStyle(theme.colors.accent)}
           >
             {isMaximized ? '❐' : '⛶'}
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); onClose(); }}
             title="Close terminal"
-            style={btnStyle('#ff6b6b')}
+            style={btnStyle(theme.colors.error)}
           >
             ✕
           </button>
@@ -214,7 +226,7 @@ export function TerminalPanel({
             width: '12px',
             height: '12px',
             cursor: 'nwse-resize',
-            background: 'linear-gradient(135deg, transparent 50%, #4a9eff55 50%)',
+            background: `linear-gradient(135deg, transparent 50%, ${theme.colors.accent}55 50%)`,
             borderRadius: '0 0 7px 0',
             zIndex: 2,
           }}

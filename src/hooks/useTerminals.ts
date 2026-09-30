@@ -12,42 +12,45 @@ export function useTerminals() {
   const [sessions, setSessions] = useState<SessionMeta[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [defaultShell, setDefaultShell] = useState<string>(() => getDefaultShell());
+  /** Last backend failure, surfaced to the UI instead of console-only. */
+  const [error, setError] = useState<string | null>(null);
 
   const list = useCallback(async () => {
     try {
       const result = await invoke<SessionMeta[]>('terminal_list', undefined, []);
       setSessions(result);
+      setError(null);
       return result;
     } catch (error) {
       console.error('Failed to list terminals:', error);
+      setError(error instanceof Error ? error.message : String(error));
       return [];
     }
   }, []);
 
   /** Create a new terminal session */
-  const create = useCallback(async (
-    cwd?: string,
-    workspaceId?: string,
-    cols?: number,
-    rows?: number,
-  ) => {
-    try {
-      const id = await invoke<string>('terminal_create', {
-        cwd: cwd || null,
-        workspaceId: workspaceId || null,
-        columns: cols,
-        rows: rows,
-      });
-      await list();
-      if (!activeId) {
-        setActiveId(id);
+  const create = useCallback(
+    async (cwd?: string, workspaceId?: string, cols?: number, rows?: number) => {
+      try {
+        const id = await invoke<string>('terminal_create', {
+          cwd: cwd || null,
+          workspaceId: workspaceId || null,
+          columns: cols,
+          rows: rows,
+        });
+        await list();
+        if (!activeId) {
+          setActiveId(id);
+        }
+        return id;
+      } catch (error) {
+        console.error('Failed to create terminal:', error);
+        setError(error instanceof Error ? error.message : String(error));
+        throw error;
       }
-      return id;
-    } catch (error) {
-      console.error('Failed to create terminal:', error);
-      throw error;
-    }
-  }, [list, activeId]);
+    },
+    [list, activeId],
+  );
 
   const close = useCallback(async (id: string) => {
     try {
@@ -112,6 +115,8 @@ export function useTerminals() {
   return {
     sessions,
     activeId,
+    error,
+    clearError: () => setError(null),
     create,
     close,
     resize,

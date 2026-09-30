@@ -8,6 +8,7 @@
 pub mod terminal;
 pub mod fs;
 pub mod state;
+pub mod env;
 pub mod events;
 pub mod license;
 pub mod agents;
@@ -28,6 +29,9 @@ use tauri::Manager;
 /// Initialize the application
 pub fn run() {
     setup_panic_hook();
+    // GUI launches (Finder/Dock) inherit launchd's minimal PATH — expand it
+    // before any child process (git, language servers, PTY shells) spawns.
+    env::harden_process_path();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
@@ -112,6 +116,7 @@ pub fn run() {
             handoff::commands::handoff_delete,
             // File system commands
             fs::commands::list_dir,
+            fs::commands::get_home,
             fs::commands::read_file,
             fs::commands::write_file,
             fs::commands::create_file,

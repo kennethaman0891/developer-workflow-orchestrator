@@ -316,7 +316,12 @@ export function Sidebar({
     <aside
       style={{
         width: '240px',
-        minHeight: '100vh',
+        // Fill the flex row (100vh shell minus the 44px top strip), never
+        // demand a full viewport height — minHeight:100vh clipped the footer
+        // by exactly the strip height with overflow:hidden giving no escape.
+        height: '100%',
+        minHeight: 0,
+        alignSelf: 'stretch',
         background: theme.colors.bgSecondary,
         borderRight: `1px solid ${theme.colors.border}`,
         display: 'flex',

@@ -90,12 +90,33 @@ impl AppState {
             .unwrap_or_else(|| PathBuf::from("/tmp/dwo-state.json"))
     }
 
-    /// Load state from disk
+    /// Load state from disk.
+    /// A corrupt file is quarantined to `state.json.corrupt-<epoch>` instead
+    /// of silently resetting to empty (which looked like total data loss
+    /// after a crash mid-write), then defaults are returned.
     pub fn load() -> Result<Self, String> {
         let path = Self::state_path();
         if path.exists() {
             let content = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
-            serde_json::from_str(&content).map_err(|e| e.to_string())
+            match serde_json::from_str(&content) {
+                Ok(state) => Ok(state),
+                Err(parse_err) => {
+                    let backup = path.with_extension(format!(
+                        "json.corrupt-{}",
+                        std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map(|d| d.as_secs())
+                            .unwrap_or(0)
+                    ));
+                    let _ = std::fs::rename(&path, &backup);
+                    eprintln!(
+                        "[dwo-state] state.json failed to parse ({}); quarantined to {} and starting fresh",
+                        parse_err,
+                        backup.display()
+                    );
+                    Ok(Self::default())
+                }
+            }
         } else {
             Ok(Self::default())
         }

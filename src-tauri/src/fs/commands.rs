@@ -12,6 +12,13 @@ pub async fn list_dir(path: String) -> Result<Vec<FsEntry>, String> {
     fs::list_dir(&path)
 }
 
+/// User's home directory (replaces the old frontend require('os') call,
+/// which throws in the browser/static-export bundle).
+#[tauri::command]
+pub fn get_home() -> Option<String> {
+    dirs::home_dir().map(|p| p.to_string_lossy().into_owned())
+}
+
 /// Recursively list a directory tree.
 ///
 /// Applies the shared ignore rules (`node_modules`, `.git`, … plus the

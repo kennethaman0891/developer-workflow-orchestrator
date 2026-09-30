@@ -5,9 +5,10 @@ import type { Terminal, ITerminalOptions } from 'xterm';
 import type { FitAddon } from 'xterm-addon-fit';
 import { invoke } from '@/lib/tauri';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
-import { reportTerminalDims } from '@/lib/terminalDims';
+import { reportTerminalDims, reportInputActivity } from '@/lib/terminalDims';
 import 'xterm/css/xterm.css';
 import { useSettings } from '@/contexts/SettingsContext';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface TerminalAnchorProps {
   sessionId?: string;
@@ -51,11 +52,25 @@ export function TerminalAnchor({ sessionId, className = '', isTui = false }: Ter
   }, [sessionId]);
 
   const { transparency, fontSize } = useSettings();
+  const { theme } = useTheme();
+
+  /** Hex #rrggbb → [r,g,b] for rgba() composition. */
+  const hexToRgb = (hex: string): [number, number, number] => {
+    const m = hex.trim().match(/^#([0-9a-f]{6})$/i);
+    if (!m) return [10, 10, 10];
+    const n = parseInt(m[1], 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  };
 
   // Compute background alpha from the global transparency setting (0-100).
   // transparency=0 → opaque, transparency=100 → fully transparent.
+  // Base is the ACTIVE theme bg (not hardcoded #0a0a0a) so the canvas blends
+  // in midnight/ocean/carbon/seti instead of only dark.
   const bgAlpha = Math.max(0, 1 - transparency / 100);
-  const bgRgba = `rgba(10, 10, 10, ${bgAlpha})`;
+  const [bgR, bgG, bgB] = hexToRgb(theme.colors.bg);
+  const bgRgba = `rgba(${bgR}, ${bgG}, ${bgB}, ${bgAlpha})`;
+  const fgColor = theme.colors.text;
+  const cursorColor = theme.colors.accent;
 
   // Shared initializer — runs once per sessionId.
   // Uses a ref to avoid recreating the terminal on every render.
@@ -95,9 +110,9 @@ export function TerminalAnchor({ sessionId, className = '', isTui = false }: Ter
         fontSize: fontSize,
         theme: {
           background: bgRgba,
-          foreground: '#e8e8e8',
-          cursor: '#4a9eff',
-          selectionBackground: '#4a9eff33',
+          foreground: fgColor,
+          cursor: cursorColor,
+          selectionBackground: `${cursorColor}33`,
         },
         allowProposedApi: true,
         scrollback: 10000,
@@ -131,18 +146,27 @@ export function TerminalAnchor({ sessionId, className = '', isTui = false }: Ter
       }
       fitAddon.fit();
 
-      // Ensure backend PTY is immediately synchronized with xterm's
-      // calculated dimensions, and record the fitted size for layout code.
-      reportTerminalDims(sessionIdRef.current ?? '', term.cols, term.rows);
-      sendResize(sessionIdRef.current, term.cols, term.rows);
+      // Publish a fitted size only when it is real: a pre-settle 0×0 rect
+      // (cold prod launch, sidebar hydration shifting layout) yields bogus
+      // 2-col sizes that poison the PTY + terminalDims registry + auto-launch
+      // pre-resize. The retry path below self-corrects the visual side.
+      const publishDims = (cols: number, rows: number) => {
+        if (cols > 0 && rows > 0) {
+          reportTerminalDims(sessionIdRef.current ?? '', cols, rows);
+          sendResize(sessionIdRef.current, cols, rows);
+        }
+      };
+      publishDims(term.cols, term.rows);
 
       // Re-fit once fonts have loaded in case character metrics changed
       if (typeof document !== 'undefined' && document.fonts?.ready) {
         document.fonts.ready.then(() => {
           if (!disposedRef.current && fitAddonRef.current && termRef.current) {
-            fitAddonRef.current.fit();
-            reportTerminalDims(sessionIdRef.current ?? '', termRef.current.cols, termRef.current.rows);
-            sendResize(sessionIdRef.current, termRef.current.cols, termRef.current.rows);
+            const rect = containerRef.current?.getBoundingClientRect();
+            if (rect && rect.width > 0 && rect.height > 0) {
+              fitAddonRef.current.fit();
+              publishDims(termRef.current.cols, termRef.current.rows);
+            }
           }
         });
       }
@@ -155,16 +179,9 @@ export function TerminalAnchor({ sessionId, className = '', isTui = false }: Ter
       fitAddonRef.current = fitAddon;
       canWriteRef.current = true; // terminal is now ready to accept input
 
-      // Apply transparency as CSS opacity on the outer container so the page
-      // background shows through the terminal viewport.
-      if (transparency > 0 && containerRef.current) {
-        const blendFactor = (100 - transparency) / 100;
-        containerRef.current.style.mixBlendMode = 'normal';
-        const xtermEl = terminalRef.current?.querySelector('.xterm-screen');
-        if (xtermEl) {
-          (xtermEl as HTMLElement).style.opacity = String(blendFactor);
-        }
-      }
+      // NOTE: no .xterm-screen opacity hack here — the rgba theme background
+      // already carries the transparency alpha. Fading the screen layer would
+      // wash out the TEXT as well as the background.
 
       // ── ResizeObserver on the OUTER containerRef ────────────────────────
       // The outer container has actual size constraints from the grid/flex
@@ -190,8 +207,10 @@ export function TerminalAnchor({ sessionId, className = '', isTui = false }: Ter
       };
 
       term.onResize(({ cols, rows }) => {
-        reportTerminalDims(sessionIdRef.current ?? '', cols, rows);
-        sendResize(sessionIdRef.current, cols, rows);
+        if (cols > 0 && rows > 0) {
+          reportTerminalDims(sessionIdRef.current ?? '', cols, rows);
+          sendResize(sessionIdRef.current, cols, rows);
+        }
       });
 
       // Forward keystrokes to the PTY
@@ -199,6 +218,8 @@ export function TerminalAnchor({ sessionId, className = '', isTui = false }: Ter
         if (!canWriteRef.current || disposedRef.current) return;
         const id = sessionIdRef.current;
         if (id) {
+          // Timestamp every keystroke so auto-launch can defer while typing.
+          reportInputActivity(id);
           invoke('terminal_write', { id, data }).catch((e) => {
             console.error('Failed to write to terminal:', e);
           });
@@ -311,35 +332,49 @@ export function TerminalAnchor({ sessionId, className = '', isTui = false }: Ter
     };
   }, [sessionId, sendResize]);
 
-  // Reactively update transparency and font-size without tearing down the
-  // terminal instance. Runs on every settings change after initial mount.
+  // Reactively update theme/transparency/font-size without tearing down the
+  // terminal instance. Uses the supported xterm APIs — setOption triggers the
+  // internal option-change render path (nested options.theme mutation does
+  // not repaint), refresh() forces the canvas redraw, and the re-fit result
+  // is published so the PTY never goes stale after a font-size change.
   useEffect(() => {
-    const term = termRef.current;
-    if (!term || disposedRef.current) return;
+    const maybeTerm = termRef.current;
+    if (!maybeTerm || disposedRef.current) return;
+    // Narrowed non-null for nested closures below.
+    const term: Terminal = maybeTerm;
 
-    // Update background colour with new alpha
     const newAlpha = Math.max(0, 1 - transparency / 100);
-    const newBgRgba = `rgba(10, 10, 10, ${newAlpha})`;
+    const [r, g, b] = hexToRgb(theme.colors.bg);
+    const newBg = `rgba(${r}, ${g}, ${b}, ${newAlpha})`;
     try {
-      (term as unknown as { options: { theme: Record<string, string> } }).options.theme.background = newBgRgba;
+      term.options.theme = {
+        ...term.options.theme,
+        background: newBg,
+        foreground: theme.colors.text,
+        cursor: theme.colors.accent,
+        selectionBackground: `${theme.colors.accent}33`,
+      };
     } catch {
-      const xtermEl = terminalRef.current?.querySelector('.xterm-screen') as HTMLElement | null;
-      if (xtermEl) xtermEl.style.opacity = String(newAlpha);
+      /* xterm not ready — canvas opacity fallback below still applies */
     }
-
-    // Update font size
     try {
-      (term as unknown as { options: { fontSize: number } }).options.fontSize = fontSize;
+      term.options.fontSize = fontSize;
+    } catch {}
+    try {
+      term.refresh(0, term.rows - 1);
     } catch {}
     try {
       fitAddonRef.current?.fit();
+      publishLiveDims();
     } catch {}
 
-    // Update canvas-layer opacity
-    const blendFactor = (100 - transparency) / 100;
-    const xtermEl = terminalRef.current?.querySelector('.xterm-screen') as HTMLElement | null;
-    if (xtermEl) xtermEl.style.opacity = String(blendFactor);
-  }, [transparency, fontSize]);
+    function publishLiveDims() {
+      if (term.cols > 0 && term.rows > 0) {
+        reportTerminalDims(sessionIdRef.current ?? '', term.cols, term.rows);
+        sendResize(sessionIdRef.current, term.cols, term.rows);
+      }
+    }
+  }, [transparency, fontSize, theme, sendResize]);
 
   // Ensure terminal stays focused
   useEffect(() => {

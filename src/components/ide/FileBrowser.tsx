@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { invoke } from '@/lib/tauri';
+import { invoke, isTauri } from '@/lib/tauri';
 import { FolderIcon, ChevronRight, ChevronDown, FileIcon } from '@/lib/setiIcons';
 import { useTheme } from '@/contexts/ThemeContext';
 
@@ -159,6 +159,11 @@ export function FileBrowser({ rootPath, onFileSelect, className, refreshToken }:
   const [error, setError] = useState<string | null>(null);
   const [truncated, setTruncated] = useState(false);
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
+  // SSR-safe environment flag: false on server/static prerender, true in DWO.app.
+  const [tauriMode, setTauriMode] = useState(false);
+  useEffect(() => {
+    setTauriMode(isTauri());
+  }, []);
   // First load only: a refresh keeps the current tree on screen instead of
   // flashing the "Loading files..." placeholder.
   const loadedRef = useRef(false);
@@ -315,6 +320,11 @@ export function FileBrowser({ rootPath, onFileSelect, className, refreshToken }:
             fontSize: '11px',
           }}>
             Empty directory
+            {!tauriMode && (
+              <div style={{ marginTop: '6px', opacity: 0.8 }}>
+                File browsing needs the desktop app — open DWO.app instead of the browser.
+              </div>
+            )}
           </div>
         )}
       </div>

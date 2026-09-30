@@ -13,6 +13,9 @@ export interface OpenFile {
 export interface UseOpenFilesReturn {
   openFiles: Map<string, OpenFile>;
   activeFilePath: string | null;
+  /** Last open/save failure, for UI banners (null when healthy). */
+  fileError: string | null;
+  clearFileError: () => void;
   addFile: (path: string) => Promise<void>;
   closeFile: (path: string) => void;
   saveFile: (path: string, content: string) => Promise<void>;
@@ -29,29 +32,37 @@ export interface UseOpenFilesReturn {
 export function useOpenFiles(): UseOpenFilesReturn {
   const [openFiles, setOpenFiles] = useState<Map<string, OpenFile>>(new Map());
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
   const saveTimeoutRef = useRef<Record<string, NodeJS.Timeout>>({});
 
   /** Add a file to the open files map */
-  const addFile = useCallback(async (path: string) => {
-    // Check if already open
-    if (openFiles.has(path)) {
-      setActiveFilePath(path);
-      return;
-    }
+  const addFile = useCallback(
+    async (path: string) => {
+      // Check if already open
+      if (openFiles.has(path)) {
+        setActiveFilePath(path);
+        return;
+      }
 
-    try {
-      const content = await readFile(path);
-      const newFile: OpenFile = { path, content, dirty: false };
-      setOpenFiles(prev => {
-        const next = new Map(prev);
-        next.set(path, newFile);
-        return next;
-      });
-      setActiveFilePath(path);
-    } catch (error) {
-      console.error(`Failed to open file ${path}:`, error);
-    }
-  }, [openFiles]);
+      try {
+        const content = await readFile(path);
+        const newFile: OpenFile = { path, content, dirty: false };
+        setOpenFiles((prev) => {
+          const next = new Map(prev);
+          next.set(path, newFile);
+          return next;
+        });
+        setActiveFilePath(path);
+        setFileError(null);
+      } catch (error) {
+        console.error(`Failed to open file ${path}:`, error);
+        setFileError(
+          `Could not open ${path.split('/').pop() || path}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    },
+    [openFiles],
+  );
 
   /** Close a file tab */
   const closeFile = useCallback((path: string) => {
@@ -71,7 +82,7 @@ export function useOpenFiles(): UseOpenFilesReturn {
   const saveFile = useCallback(async (path: string, content: string) => {
     try {
       await writeFile(path, content);
-      setOpenFiles(prev => {
+      setOpenFiles((prev) => {
         const file = prev.get(path);
         if (file) {
           const next = new Map(prev);
@@ -80,8 +91,15 @@ export function useOpenFiles(): UseOpenFilesReturn {
         }
         return prev;
       });
+      setFileError(null);
     } catch (error) {
       console.error(`Failed to save ${path}:`, error);
+      // Keep dirty=true (untouched above) AND surface the failure — the old
+      // code swallowed it, so users closed tabs believing edits were saved.
+      setFileError(
+        `Could not save ${path.split('/').pop() || path}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      throw error;
     }
   }, []);
 
@@ -115,6 +133,8 @@ export function useOpenFiles(): UseOpenFilesReturn {
   return {
     openFiles,
     activeFilePath,
+    fileError,
+    clearFileError: () => setFileError(null),
     addFile,
     closeFile,
     saveFile,

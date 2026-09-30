@@ -38,11 +38,51 @@ export interface LayoutState {
 
 const STORAGE_KEY = 'dwo-terminal-layout';
 
+/** Schema version for persisted layouts — bump when Panel/LayoutState changes. */
+const LAYOUT_SCHEMA_VERSION = 1;
+
+function isValidPanel(p: unknown): p is Panel {
+  if (typeof p !== 'object' || p === null) return false;
+  const o = p as Record<string, unknown>;
+  return (
+    typeof o.id === 'string' &&
+    o.id.length > 0 &&
+    Number.isInteger(o.col) &&
+    (o.col as number) >= 0 &&
+    (o.col as number) < 20 &&
+    Number.isInteger(o.row) &&
+    (o.row as number) >= 0 &&
+    (o.row as number) < 20 &&
+    Number.isInteger(o.spanCol) &&
+    (o.spanCol as number) >= 1 &&
+    (o.spanCol as number) <= 20 &&
+    Number.isInteger(o.spanRow) &&
+    (o.spanRow as number) >= 1 &&
+    (o.spanRow as number) <= 20
+  );
+}
+
 function loadLayout(key: string): LayoutState | null {
   try {
     const raw = localStorage.getItem(key);
     if (!raw) return null;
-    return JSON.parse(raw) as LayoutState;
+    const parsed = JSON.parse(raw) as {
+      v?: number;
+      mode?: unknown;
+      panels?: unknown;
+      activeId?: unknown;
+    };
+    // Reject unknown/future schemas and malformed shapes instead of
+    // rendering ghost panels from a stale or cross-version layout.
+    if (parsed.v !== undefined && parsed.v !== LAYOUT_SCHEMA_VERSION) return null;
+    if (parsed.mode !== 'grid' && parsed.mode !== 'split-h' && parsed.mode !== 'split-v') {
+      return null;
+    }
+    if (!Array.isArray(parsed.panels) || parsed.panels.length === 0) return null;
+    const panels = parsed.panels.filter(isValidPanel);
+    if (panels.length === 0) return null;
+    const activeId = typeof parsed.activeId === 'string' ? parsed.activeId : null;
+    return { mode: parsed.mode, panels, activeId };
   } catch {
     return null;
   }
@@ -50,7 +90,7 @@ function loadLayout(key: string): LayoutState | null {
 
 function saveLayout(key: string, state: LayoutState) {
   try {
-    localStorage.setItem(key, JSON.stringify(state));
+    localStorage.setItem(key, JSON.stringify({ ...state, v: LAYOUT_SCHEMA_VERSION }));
   } catch {
     /* quota errors are non-fatal */
   }
@@ -81,13 +121,21 @@ export function useTerminalLayout(
   });
   const hasMounted = useRef(false);
 
-  // Load persisted layout after first render (client-side only)
+  // Load persisted layout after first render (client-side only), and reset
+  // whenever the storage key changes (workspace switch).
+  // layoutLoaded distinguishes "still restoring" from "genuinely empty" so
+  // callers never flash a false "No terminals yet" on cold start.
+  const [layoutLoaded, setLayoutLoaded] = useState(false);
   useEffect(() => {
+    setLayoutLoaded(false);
     const saved = loadLayout(storageKey);
     if (saved && saved.panels.length > 0) {
       setLayout(saved);
+    } else {
+      setLayout({ mode: 'grid', panels: [], activeId: null });
     }
     hasMounted.current = true;
+    setLayoutLoaded(true);
   }, [storageKey]);
 
   const [gridSize] = useState({ cols: 4, rows: 3 }); // visual grid size hint
@@ -320,6 +368,7 @@ export function useTerminalLayout(
 
   return {
     layout,
+    layoutLoaded,
     gridSize,
     syncActiveFromSessions,
     syncPanels,

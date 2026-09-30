@@ -34,9 +34,12 @@ export function TabBar({ tabs, activePath, onTabClick, onTabClose, className }: 
         display: 'flex',
         background: theme.colors.bg,
         borderBottom: `1px solid ${theme.colors.border}`,
-        overflow: 'hidden',
+        // Tabs scroll horizontally instead of clipping past 6+ open files.
+        overflowX: 'auto',
+        overflowY: 'hidden',
         height: '35px',
         flexShrink: 0,
+        scrollbarWidth: 'thin',
       }}
     >
       {tabs.map(tab => {
@@ -63,6 +66,7 @@ export function TabBar({ tabs, activePath, onTabClick, onTabClose, className }: 
               whiteSpace: 'nowrap',
               minWidth: '100px',
               maxWidth: '200px',
+              flexShrink: 0,
               position: 'relative',
             }}
           >
