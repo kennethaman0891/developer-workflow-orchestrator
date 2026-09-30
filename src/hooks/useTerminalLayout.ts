@@ -123,10 +123,10 @@ export function useTerminalLayout(
    * column-by-column. This ensures new panels never overlap existing ones,
    * even when some panels span multiple cells.
    */
-  function findFirstEmptyCell(panels: Panel[]): { col: number; row: number } {
-    // Scan up to a large grid size (more than enough for typical use)
+  function findFirstEmptyCell(panels: Panel[], maxCols: number = 2): { col: number; row: number } {
+    const colsLimit = Math.max(1, maxCols);
     for (let row = 0; row < 20; row++) {
-      for (let col = 0; col < 10; col++) {
+      for (let col = 0; col < colsLimit; col++) {
         let occupied = false;
         for (const panel of panels) {
           // Check if (col, row) falls within this panel's bounds
@@ -159,7 +159,8 @@ export function useTerminalLayout(
           newPanels.push({ id: sessionId, col: 0, row: 0, spanCol: 1, spanRow: 1 });
         } else {
           // Find the first empty cell to avoid overlapping resized panels
-          const pos = findFirstEmptyCell(newPanels);
+          const targetCols = newPanels.length >= 4 ? 3 : 2;
+          const pos = findFirstEmptyCell(newPanels, targetCols);
           newPanels.push({ id: sessionId, col: pos.col, row: pos.row, spanCol: 1, spanRow: 1 });
         }
         return { ...prev, panels: newPanels, activeId: sessionId };
@@ -281,16 +282,28 @@ export function useTerminalLayout(
         return keep;
       });
 
+      // If only 1 panel remains, reset it to (0, 0, 1, 1) so it fills the full workspace
+      if (panels.length === 1 && (panels[0].col !== 0 || panels[0].row !== 0 || panels[0].spanCol !== 1 || panels[0].spanRow !== 1)) {
+        panels[0] = { ...panels[0], col: 0, row: 0, spanCol: 1, spanRow: 1 };
+        changed = true;
+      }
+
       // Add panels for sessions that are running but not yet in the layout.
       const existing = new Set(panels.map((p) => p.id));
       let lastAdded: string | null = null;
+      const targetCols = sessionIds.length > 4 ? (sessionIds.length > 6 ? 4 : 3) : 2;
+
       for (const id of sessionIds) {
         if (existing.has(id)) continue;
         changed = true;
         lastAdded = id;
-        // Find first empty cell to avoid overlapping resized panels
-        const pos = findFirstEmptyCell(panels);
-        panels.push({ id, col: pos.col, row: pos.row, spanCol: 1, spanRow: 1 });
+        if (panels.length === 0) {
+          panels.push({ id, col: 0, row: 0, spanCol: 1, spanRow: 1 });
+        } else {
+          // Find first empty cell to avoid overlapping resized panels
+          const pos = findFirstEmptyCell(panels, targetCols);
+          panels.push({ id, col: pos.col, row: pos.row, spanCol: 1, spanRow: 1 });
+        }
       }
 
       if (!changed) return prev;

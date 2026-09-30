@@ -107,9 +107,28 @@ export async function googleOAuthPopup(clientId: string): Promise<OAuthResult> {
 
     // Listen for postMessage from the popup (sent after OAuth completes)
     const messageHandler = (event: MessageEvent) => {
+      // Validate origin: only accept messages from same origin or local callback
+      if (
+        event.origin !== window.location.origin &&
+        !event.origin.startsWith('http://localhost:') &&
+        !event.origin.startsWith('http://127.0.0.1:') &&
+        !event.origin.startsWith('https://localhost')
+      ) {
+        return;
+      }
+
       if (event.data?.type === 'google_oauth_result') {
         cleanup();
-        handleOAuthResponse(event.data.params);
+        const params = event.data.params || event.data.payload;
+        if (params instanceof URLSearchParams) {
+          handleOAuthResponse(params);
+        } else if (typeof params === 'string') {
+          handleOAuthResponse(new URLSearchParams(params));
+        } else if (params && typeof params === 'object') {
+          handleOAuthResponse(new URLSearchParams(params));
+        } else {
+          reject(new Error('Invalid OAuth response payload'));
+        }
       } else if (event.data?.type === 'google_oauth_error') {
         cleanup();
         reject(new Error(event.data.payload?.error || 'Authentication failed'));

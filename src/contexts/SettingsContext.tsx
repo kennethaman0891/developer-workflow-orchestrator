@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 
 export interface AppSettings {
   fontSize: number;
@@ -52,10 +52,24 @@ interface SettingsValue extends AppSettings {
 const SettingsContext = createContext<SettingsValue | null>(null);
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
-  const [settings, setSettings] = useState<AppSettings>(loadSettings);
+  // Start from the shared DEFAULTS on BOTH server and client so the first
+  // render matches the SSR'd HTML. Persisted settings are hydrated after
+  // mount — loading localStorage in the initializer desynced the trees and
+  // tripped React's hydration check whenever saved values differed.
+  const [settings, setSettings] = useState<AppSettings>(DEFAULTS);
 
-  // Persist whenever settings change
   useEffect(() => {
+    setSettings(loadSettings());
+  }, []);
+
+  // Persist on change — but skip the pre-hydration mount save so the load
+  // above can't be clobbered by writing DEFAULTS back over stored values.
+  const firstPersistRef = useRef(true);
+  useEffect(() => {
+    if (firstPersistRef.current) {
+      firstPersistRef.current = false;
+      return;
+    }
     saveSettings(settings);
   }, [settings]);
 

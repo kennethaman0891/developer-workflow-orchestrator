@@ -16,7 +16,8 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import type { SessionMeta } from '@/hooks/useTerminals';
 import { useTerminalLayout } from '@/hooks/useTerminalLayout';
 import { useAutoLaunch, type PaneDimensions } from '@/hooks/useAutoLaunch';
-import { terminalResize } from '@/lib/terminal';
+import { getTerminalDims, waitForTerminalDims, forgetTerminalDims } from '@/lib/terminalDims';
+import { useSettings } from '@/contexts/SettingsContext';
 import { TerminalPanel } from './TerminalPanel';
 
 enum LayoutMode {
@@ -190,6 +191,11 @@ interface TerminalLayoutProps {
   autoLaunchCommand?: string | null;
   /** Whether auto-exec permission is enabled */
   autoLaunchEnabled?: boolean;
+  /**
+   * Called after auto-launch finishes — lets the parent re-list sessions so
+   * `is_tui` (set during launch) reaches the TUI auto-expand effect promptly.
+   */
+  onAutoLaunched?: () => void;
   /** Called when the active terminal changes — used by the handoff panel at app level */
   onActiveSessionChange?: (id: string | null) => void;
 }
@@ -202,6 +208,7 @@ export function TerminalLayout({
   layoutKey,
   autoLaunchCommand,
   autoLaunchEnabled,
+  onAutoLaunched,
   onActiveSessionChange,
 }: TerminalLayoutProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -221,6 +228,10 @@ export function TerminalLayout({
     setMode,
     focusPanel,
   } = useTerminalLayout(sessions, setActiveId, layoutKey);
+
+  // Real xterm font size — used for the auto-launch pre-resize estimate so
+  // the PTY is sized with the same metrics the terminal actually fits with.
+  const { fontSize } = useSettings();
 
   const gridContainerRef = useRef<HTMLDivElement>(null);
 
@@ -243,41 +254,73 @@ export function TerminalLayout({
     launchedKeyRef.current = launchKey;
 
     const run = async () => {
-      // Wait for shells to reach a prompt (scaled delay)
-      const n = sessions.length;
-      const delay = Math.min(1500, 500 + n * 120);
-      await new Promise((r) => setTimeout(r, delay + 200));
+      // Wait for shells to reach a prompt (scaled delay — login shells with
+      // nvm/cargo/compinit rc files can take 2-3s to fully start).
+      const sessionIds = sessions.map((s) => s.id);
+      const n = sessionIds.length;
+      const delay = Math.min(2500, 1000 + n * 400);
+      await new Promise((r) => setTimeout(r, delay));
 
-      // Compute grid dimensions from the container
+      // Wait for xterm instances to report their actually-fitted dimensions.
+      await waitForTerminalDims(sessionIds, 2000);
+
       const container = gridContainerRef.current;
-      let dimensions: PaneDimensions[] = [];
-      if (container) {
-        const rect = container.getBoundingClientRect();
-        const cols = Math.ceil(Math.sqrt(n));
-        const rows = Math.ceil(n / cols);
-        const cellW = rect.width / cols;
-        const cellH = rect.height / rows;
-        for (const s of sessions) {
-          const dims = computePtyDimensions(cellW, cellH);
-          dimensions.push({ sessionId: s.id, cols: dims.cols, rows: dims.rows });
+      const dimensions: PaneDimensions[] = [];
+      for (const s of sessions) {
+        // Prefer the exact xterm-fitted dimensions (zero corrective resize).
+        const fitted = getTerminalDims(s.id);
+        if (fitted) {
+          dimensions.push({ sessionId: s.id, cols: fitted.cols, rows: fitted.rows });
+          continue;
         }
-      } else {
-        dimensions = sessions.map((s) => ({ sessionId: s.id, cols: 120, rows: 40 }));
+        // Fallback: estimate from the panel element, but ONLY when it is
+        // actually visible. A 0×0 measurement (maximized sibling under
+        // display:none, or split modes where the grid container is unmounted)
+        // used to floor to 160×80px → a 20×5 PTY right before the CLI launch.
+        const panelEl = container?.querySelector(`[data-panel-id="${s.id}"]`) as HTMLElement | null;
+        if (panelEl) {
+          const panelRect = panelEl.getBoundingClientRect();
+          if (panelRect.width > 0 && panelRect.height > 0) {
+            const dims = computePtyDimensions(panelRect.width - 4, panelRect.height - 36, fontSize);
+            dimensions.push({ sessionId: s.id, cols: dims.cols, rows: dims.rows });
+          }
+        }
+        // Otherwise skip the pre-resize: the PTY keeps its last fitted size
+        // (or the 80×24 default) while invisible and self-corrects on show.
       }
 
-      // Pre-resize PTYs to exact grid cell dimensions
+      // Pre-resize PTYs to their real dimensions
       await preResizePanes(dimensions);
 
       // Launch the command (staggered 200ms apart)
       await autoLaunch({
         command: autoLaunchCommand,
-        sessionIds: sessions.map((s) => s.id),
+        sessionIds,
         enabled: true,
       });
+
+      // Re-list sessions so is_tui (set during auto-launch) reaches the
+      // parent and the TUI auto-expand effect fires promptly.
+      onAutoLaunched?.();
     };
 
     run().catch(console.error);
-  }, [sessions, autoLaunchCommand, autoLaunchEnabled, autoLaunch, preResizePanes, computePtyDimensions]);
+  }, [sessions, autoLaunchCommand, autoLaunchEnabled, autoLaunch, preResizePanes, computePtyDimensions, fontSize, onAutoLaunched]);
+
+  // ── TUI auto-expand: maximize when any session enters TUI mode ─────────
+  // Fires at most once per session (autoMaxRef) so manually restoring a
+  // panel is not immediately re-maximized on a later sessions re-list.
+  const autoMaxRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!sessions || sessions.length === 0) return;
+    const tuiSession = sessions.find((s) => s.is_tui && !autoMaxRef.current.has(s.id));
+    if (tuiSession && maximizedId !== tuiSession.id) {
+      autoMaxRef.current.add(tuiSession.id);
+      setMaximizedId(tuiSession.id);
+      prevModeRef.current = layout.mode;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessions]);
 
   // ── Sync active from backend focus events ──────────────────────────────────
   useEffect(() => {
@@ -326,6 +369,7 @@ export function TerminalLayout({
   // ── Close handler ──────────────────────────────────────────────────────────
   const handleClose = useCallback(
     (id: string) => {
+      forgetTerminalDims(id);
       removePanel(id);
       onCloseSession?.(id);
     },
@@ -349,17 +393,7 @@ export function TerminalLayout({
     [layout.mode],
   );
 
-  // ── TUI auto-expand: maximize when any session enters TUI mode ──────────
-  useEffect(() => {
-    if (!sessions || sessions.length === 0) return;
-    const tuiSession = sessions.find((s) => s.is_tui);
-    if (tuiSession && !maximizedId) {
-      setMaximizedId(tuiSession.id);
-      prevModeRef.current = layout.mode;
-    }
-  }, [sessions]); // intentionally not including maximizedId to avoid loop
-
-  // ── Render: maximized single panel ─────────────────────────────────────────
+  // ── Render: empty state ───────────────────────────────────────────────────
   if (!sessions || sessions.length === 0) {
     return (
       <div data-split-container="true" style={containerStyle}>
@@ -374,35 +408,14 @@ export function TerminalLayout({
     );
   }
 
-  if (maximizedId) {
-    const session = sessionsMap.get(maximizedId);
-    if (!session) return null;
-    const prevMode = prevModeRef.current ?? LayoutMode.GRID;
-    return (
-      <div style={{ ...containerStyle, padding: '8px' }}>
-        <div style={maximizedWrapStyle}>
-          <button onClick={() => setMaximizedId(null)} style={restoreBtnStyle}>
-            ⤓ Restore ({prevMode === LayoutMode.SPLIT_H ? 'split-h' : prevMode === LayoutMode.SPLIT_V ? 'split-v' : 'grid'})
-          </button>
-          <TerminalPanel
-            id={session.id}
-            title={session.title}
-            visible={session.visible}
-            isActive={session.id === activeId}
-            onClose={() => handleClose(session.id)}
-            onFocus={() => focusPanel(session.id)}
-            onMaximize={() => handleMaximize(session.id)}
-          />
-        </div>
-      </div>
-    );
-  }
+  // Filter panels to only those that actually exist in the current sessions
+  const validPanels = layout.panels.filter((p) => sessionsMap.has(p.id));
 
   // ── Render: split-h (exactly 2 panels side-by-side with draggable divider) ──
-  // Falls through to grid mode for 0, 1, or 3+ panels.
-  if (layout.mode === LayoutMode.SPLIT_H && layout.panels.length === 2) {
-    const p1 = layout.panels[0];
-    const p2 = layout.panels[1];
+  // Falls through to grid mode if a panel is maximized, or for 0, 1, or 3+ panels.
+  if (layout.mode === LayoutMode.SPLIT_H && validPanels.length === 2 && !maximizedId) {
+    const p1 = validPanels[0];
+    const p2 = validPanels[1];
     const s1 = sessionsMap.get(p1.id);
     const s2 = sessionsMap.get(p2.id);
     if (!s1 || !s2) return null;
@@ -415,6 +428,8 @@ export function TerminalLayout({
             title={s1.title}
             visible={s1.visible}
             isActive={s1.id === activeId}
+            isMaximized={false}
+            isTui={s1.is_tui}
             onClose={() => handleClose(s1.id)}
             onFocus={() => focusPanel(s1.id)}
             onMaximize={() => handleMaximize(s1.id)}
@@ -427,6 +442,8 @@ export function TerminalLayout({
             title={s2.title}
             visible={s2.visible}
             isActive={s2.id === activeId}
+            isMaximized={false}
+            isTui={s2.is_tui}
             onClose={() => handleClose(s2.id)}
             onFocus={() => focusPanel(s2.id)}
             onMaximize={() => handleMaximize(s2.id)}
@@ -437,10 +454,10 @@ export function TerminalLayout({
   }
 
   // ── Render: split-v (exactly 2 panels stacked with draggable divider) ───────
-  // Falls through to grid mode for 0, 1, or 3+ panels.
-  if (layout.mode === LayoutMode.SPLIT_V && layout.panels.length === 2) {
-    const p1 = layout.panels[0];
-    const p2 = layout.panels[1];
+  // Falls through to grid mode if a panel is maximized, or for 0, 1, or 3+ panels.
+  if (layout.mode === LayoutMode.SPLIT_V && validPanels.length === 2 && !maximizedId) {
+    const p1 = validPanels[0];
+    const p2 = validPanels[1];
     const s1 = sessionsMap.get(p1.id);
     const s2 = sessionsMap.get(p2.id);
     if (!s1 || !s2) return null;
@@ -453,6 +470,8 @@ export function TerminalLayout({
             title={s1.title}
             visible={s1.visible}
             isActive={s1.id === activeId}
+            isMaximized={false}
+            isTui={s1.is_tui}
             onClose={() => handleClose(s1.id)}
             onFocus={() => focusPanel(s1.id)}
             onMaximize={() => handleMaximize(s1.id)}
@@ -465,6 +484,8 @@ export function TerminalLayout({
             title={s2.title}
             visible={s2.visible}
             isActive={s2.id === activeId}
+            isMaximized={false}
+            isTui={s2.is_tui}
             onClose={() => handleClose(s2.id)}
             onFocus={() => focusPanel(s2.id)}
             onMaximize={() => handleMaximize(s2.id)}
@@ -475,24 +496,44 @@ export function TerminalLayout({
   }
 
   // ── Render: grid mode ──────────────────────────────────────────────────────
-  // Calculate grid dimensions from ACTUAL panel positions and spans, not just
-  // panel count. This ensures resized panels (spanning multiple cells) fit
-  // properly within the grid.
-  const numPanels = layout.panels.length;
+  // Calculate grid dimensions from ACTUAL panel positions and spans of valid sessions.
+  const numPanels = validPanels.length;
+  // If there's only 1 panel, ensure it is at (0,0) and spans (1,1) so it fills the workspace
+  const normalizedPanels = numPanels <= 1
+    ? (validPanels.length === 1 ? [{ ...validPanels[0], col: 0, row: 0, spanCol: 1, spanRow: 1 }] : [])
+    : validPanels;
+
   let maxCol = 0;
   let maxRow = 0;
-  for (const panel of layout.panels) {
+  for (const panel of normalizedPanels) {
     maxCol = Math.max(maxCol, panel.col + panel.spanCol);
     maxRow = Math.max(maxRow, panel.row + panel.spanRow);
   }
-  // Ensure minimum sensible grid size (at least 2 cols for readability)
-  const totalCols = Math.max(2, maxCol);
-  const totalRows = Math.max(1, maxRow);
+  // When a panel is maximized, force 1×1 single cell taking 100% width and height.
+  // When there is only 1 panel, use 1 column so it fills the full workspace width.
+  // When there are 2 or more panels, ensure at least 2 columns for grid arrangement.
+  const totalCols = maximizedId ? 1 : (numPanels <= 1 ? 1 : Math.max(2, maxCol));
+  const totalRows = maximizedId ? 1 : Math.max(1, maxRow);
 
   return (
     <div data-split-container="true" style={containerStyle}>
       {/* Toolbar */}
       <div style={toolbarStyle}>
+        {maximizedId && (
+          <button
+            onClick={() => setMaximizedId(null)}
+            style={{
+              ...createBtnStyle,
+              background: '#2a2a2a',
+              color: '#e8e8e8',
+              border: '1px solid #3a3a3a',
+              marginRight: '8px',
+            }}
+          >
+            ⤓ Restore
+          </button>
+        )}
+
         <div style={modeGroupStyle}>
           <button
             onClick={() => setMode(LayoutMode.GRID)}
@@ -522,8 +563,7 @@ export function TerminalLayout({
         </span>
       </div>
 
-      {/* Grid — FIX: overflow:hidden instead of auto so terminals are
-          constrained to exact cell dimensions. Padding moved to individual cells. */}
+      {/* Grid */}
       {layout.panels.length === 0 ? (
         <div style={emptyStyle}>
           <div style={{ fontSize: '28px', marginBottom: '8px' }}>⌘</div>
@@ -540,8 +580,8 @@ export function TerminalLayout({
             display: 'grid',
             gridTemplateColumns: `repeat(${totalCols}, 1fr)`,
             gridTemplateRows: `repeat(${totalRows}, 1fr)`,
-            gap: '6px',
-            padding: '8px',
+            gap: maximizedId ? '0' : '6px',
+            padding: maximizedId ? '4px' : '8px',
             overflow: 'hidden',
             minHeight: 0,
             minWidth: 0,
@@ -549,28 +589,48 @@ export function TerminalLayout({
           onDragOver={(e) => e.preventDefault()}
           onDrop={handlePanelDrop}
         >
-          {layout.panels.map((panel) => {
+          {normalizedPanels.map((panel) => {
             const session = sessionsMap.get(panel.id);
             if (!session) return null;
             const isDragSource = draggedId === panel.id;
             const isDropTarget = dropTargetId === panel.id;
+            const isMaximized = maximizedId === panel.id;
+
+            // When a panel is maximized, keep other panels mounted in DOM but hidden
+            if (maximizedId && !isMaximized) {
+              return (
+                <div
+                  key={panel.id}
+                  data-panel-id={panel.id}
+                  style={{ display: 'none' }}
+                >
+                  <TerminalPanel
+                    id={session.id}
+                    title={session.title}
+                    visible={session.visible}
+                    isActive={session.id === activeId}
+                    isMaximized={false}
+                    isTui={session.is_tui}
+                    onClose={() => handleClose(session.id)}
+                    onFocus={() => focusPanel(session.id)}
+                    onMaximize={() => handleMaximize(session.id)}
+                  />
+                </div>
+              );
+            }
 
             return (
               <div
                 key={panel.id}
-                draggable
                 data-panel-id={panel.id}
                 data-span-col={panel.spanCol}
                 data-span-row={panel.spanRow}
-                onDragStart={() => handlePanelDragStart(panel.id)}
                 onDragOver={(e) => handlePanelDragOver(e, panel.id)}
                 onDrop={handlePanelDrop}
                 style={{
                   display: 'flex',
-                  gridColumn: panel.col + 1,
-                  gridRow: panel.row + 1,
-                  gridColumnEnd: `span ${panel.spanCol}`,
-                  gridRowEnd: `span ${panel.spanRow}`,
+                  gridColumn: isMaximized ? '1' : `${panel.col + 1} / span ${panel.spanCol}`,
+                  gridRow: isMaximized ? '1' : `${panel.row + 1} / span ${panel.spanRow}`,
                   opacity: isDragSource ? 0.4 : 1,
                   outline: isDropTarget ? '2px dashed #4a9eff' : 'none',
                   outlineOffset: '-2px',
@@ -579,7 +639,9 @@ export function TerminalLayout({
                   transition: 'opacity 0.15s, outline 0.15s',
                   minHeight: 0,
                   minWidth: 0,
-                  padding: '6px',
+                  padding: isMaximized ? '0' : '6px',
+                  width: '100%',
+                  height: '100%',
                 }}
               >
                 <TerminalPanel
@@ -587,9 +649,12 @@ export function TerminalLayout({
                   title={session.title}
                   visible={session.visible}
                   isActive={session.id === activeId}
+                  isMaximized={isMaximized}
+                  isTui={session.is_tui}
                   onClose={() => handleClose(session.id)}
                   onFocus={() => focusPanel(session.id)}
                   onMaximize={() => handleMaximize(session.id)}
+                  onDragStart={() => handlePanelDragStart(panel.id)}
                   onResize={(spanCol, spanRow) => resizePanel(session.id, spanCol, spanRow)}
                   gridContainerRef={gridContainerRef}
                   gridCols={totalCols}

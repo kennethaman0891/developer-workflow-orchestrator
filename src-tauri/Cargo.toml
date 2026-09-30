@@ -9,7 +9,7 @@ name = "dwo_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [dependencies]
-tauri = { version = "2", features = ["image-png", "unstable", "devtools"] }
+tauri = { version = "2", features = ["image-png", "unstable"] }
 tauri-plugin-shell = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-dialog = "2"
@@ -37,6 +37,7 @@ chrono = { version = "0.4", features = ["serde"] }
 async-channel = "2"
 once_cell = "1"
 notify = "6"
+strip-ansi = "0.1"
 objc2 = { version = "0.6", features = ["exception"] }
 
 # DWO patch: tao 0.35.3 crashes on macOS 26 (Tahoe) at launch — an NSException
@@ -52,6 +53,7 @@ tauri-build = { version = "2", features = [] }
 [features]
 custom-protocol = ["tauri/custom-protocol"]
 default = ["custom-protocol"]
+devtools = ["tauri/devtools"]
 
 [profile.release]
 opt-level = 2

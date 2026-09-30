@@ -32,6 +32,79 @@ fn detect_login_shell() -> String {
     }
 }
 
+/// Repair the shell environment for GUI-launched app instances.
+///
+/// DWO is usually started from Finder/Dock, where the app process inherits
+/// launchd's minimal GUI environment: `PATH=/usr/bin:/bin:/usr/sbin:/sbin`
+/// with no user-local directories (`~/.local/bin`, `~/.cargo/bin`, Homebrew)
+/// and possibly no `LANG` or `HOME`. A CLI like `claude` then can't be
+/// resolved until (or unless) the shell's rc files extend PATH.
+///
+/// portable-pty's `CommandBuilder` inherits the app's full environment, so
+/// we only override the variables that need repair — user-set values are
+/// always preserved. Unix only; the Windows PowerShell path is untouched.
+#[cfg(unix)]
+fn repair_shell_env(builder: &mut CommandBuilder) {
+    let home = dirs::home_dir()
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    if home.is_empty() {
+        return;
+    }
+
+    // HOME — required for rc files, cargo, nvm, etc.
+    // Always set it so GUI-launched instances (which may inherit a wrong HOME
+    // from launchd) get the correct user home directory.
+    builder.env("HOME", home.as_str());
+
+    // USER / LOGNAME — derive from the home directory's last component
+    // (/Users/<name>, /home/<name>) and always set them.
+    // This prevents issues like brew seeing a truncated or wrong username.
+    if let Some(name) = home.rsplit('/').next() {
+        builder.env("USER", name);
+        builder.env("LOGNAME", name);
+    }
+
+    // PATH — keep everything the user already has, prepend the common
+    // user-local / Homebrew / system directories that are missing.
+    let inherited = std::env::var("PATH").unwrap_or_default();
+    let mut kept: Vec<String> = Vec::new();
+    for dir in inherited.split(':') {
+        if !dir.is_empty() && !kept.iter().any(|p| p == dir) {
+            kept.push(dir.to_string());
+        }
+    }
+    let preferred = [
+        format!("{}/.local/bin", home),
+        format!("{}/.cargo/bin", home),
+        "/opt/homebrew/bin".to_string(),
+        "/opt/homebrew/sbin".to_string(),
+        "/usr/local/bin".to_string(),
+        "/usr/local/sbin".to_string(),
+        "/usr/bin".to_string(),
+        "/bin".to_string(),
+        "/usr/sbin".to_string(),
+        "/sbin".to_string(),
+    ];
+    let mut merged: Vec<String> = Vec::new();
+    for dir in &preferred {
+        if !kept.iter().any(|p| p == dir) && !merged.iter().any(|p| p == dir) {
+            merged.push(dir.clone());
+        }
+    }
+    merged.extend(kept);
+    builder.env("PATH", merged.join(":").as_str());
+
+    // LANG — a usable locale for prompts and multibyte output; never
+    // override a user-set LANG or LC_ALL.
+    let has_locale = ["LANG", "LC_ALL"]
+        .iter()
+        .any(|var| std::env::var(var).map(|v| !v.is_empty()).unwrap_or(false));
+    if !has_locale {
+        builder.env("LANG", "en_US.UTF-8");
+    }
+}
+
 /// Spawn a new PTY session with the user's real login shell.
 ///
 /// Returns the session paired with the output receiver. The caller MUST
@@ -42,7 +115,14 @@ pub fn spawn_shell(
     rows: u16,
 ) -> Result<(TerminalSession, mpsc::UnboundedReceiver<Vec<u8>>), String> {
     let result = catch_unwind(AssertUnwindSafe(|| {
-        let cwd = cwd.unwrap_or(Path::new("/"));
+        // Always resolve cwd to an explicit path — never fall back to "/".
+        // Using the user's real home dir ensures shell rc files (brew, nvm, etc.)
+        // run in a directory they can read and write.
+        let cwd: std::path::PathBuf = match cwd {
+            Some(p) => p.to_path_buf(),
+            None => std::env::home_dir().unwrap_or_else(|| std::path::PathBuf::from("/")),
+        };
+        let cwd_ref = cwd.as_path();
 
         // Create terminal dimensions
         let size = PtySize {
@@ -69,13 +149,15 @@ pub fn spawn_shell(
         } else {
             cmd_builder.arg("-l");
         }
-        if cwd != Path::new("/") {
-            cmd_builder.cwd(cwd);
-        }
+        cmd_builder.cwd(cwd_ref);
         // Set terminal environment for proper TUI rendering
         cmd_builder.env("TERM", "xterm-256color");
         cmd_builder.env("COLORTERM", "truecolor");
         cmd_builder.env("DWO", "1");
+        // Repair the inherited environment for GUI-launched instances
+        // (launchd gives apps a minimal PATH/HOME/LANG — see fn above)
+        #[cfg(unix)]
+        repair_shell_env(&mut cmd_builder);
 
         let child = pair
             .slave
@@ -89,7 +171,7 @@ pub fn spawn_shell(
         let meta = super::session::SessionMeta::new(
             &session_id,
             &shell,
-            &cwd.to_path_buf(),
+            &cwd,
             columns,
             rows,
         );

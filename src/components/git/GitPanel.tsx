@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useGit } from '@/hooks/useGit';
 import { isTauri } from '@/lib/tauri';
@@ -32,7 +32,15 @@ export function GitPanel({ projectPath }: GitPanelProps) {
   const { theme } = useTheme();
   const { status, loading, getStatus, stageFile, unstageFile, commit } = useGit(projectPath);
   const [commitMessage, setCommitMessage] = useState('');
-  const [collapsed, setCollapsed] = useState<boolean>(readCollapsed);
+  // SSR-safe: start expanded on BOTH server and client, then hydrate the
+  // persisted collapse state after mount. Reading localStorage in the
+  // initializer desyncs the trees — the server has no localStorage, so it
+  // always fell back to expanded while the client used the stored value.
+  const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    setCollapsed(readCollapsed());
+  }, []);
 
   const toggleCollapsed = useCallback(() => {
     setCollapsed(prev => {

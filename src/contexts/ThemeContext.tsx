@@ -24,13 +24,19 @@ function kebab(name: string): string {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [currentThemeKey, setCurrentThemeKey] = useState<ThemeKey>(() => {
+  // Start from the shared default on BOTH server and client so the first
+  // render matches the SSR'd HTML. The saved theme is hydrated after mount —
+  // reading localStorage in the initializer desynced the trees (server had
+  // no localStorage, so it fell back to 'seti' while the client used the
+  // saved theme) and tripped React's hydration check.
+  const [currentThemeKey, setCurrentThemeKey] = useState<ThemeKey>('seti');
+
+  useEffect(() => {
     try {
       const saved = localStorage.getItem('dwo-theme');
-      if (saved && saved in themes) return saved as ThemeKey;
+      if (saved && saved in themes) setCurrentThemeKey(saved as ThemeKey);
     } catch {}
-    return 'seti';
-  });
+  }, []);
 
   const theme = themes[currentThemeKey];
 

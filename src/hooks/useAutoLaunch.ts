@@ -5,7 +5,7 @@
  * of a workspace after they reach a prompt.
  *
  * Behavior:
- * 1. Waits for all terminals to be created (scaled delay: min(1500, 500 + n*120) ms)
+ * 1. Waits for all terminals to be created (scaled delay: min(1200, 400 + n*200) ms)
  * 2. Pre-resizes each PTY to the exact grid cell dimensions
  * 3. Sends the command (staggered ~200ms apart)
  * 4. Sets TUI mode on the sessions for auto-expand detection
@@ -31,12 +31,15 @@ export interface PaneDimensions {
 
 /**
  * Compute expected PTY dimensions from a CSS pixel rectangle.
- * Standard: ~8px per char width, ~16px per row height (with 13px font).
+ * Standard: ~8px per char width, ~16px per row height.
+ *
+ * NOTE: fallback-only estimator — the real xterm-fitted dims are reported via
+ * the terminalDims registry and preferred by the layout's pre-resize.
  */
 function computePtyDimensions(
   pixelWidth: number,
   pixelHeight: number,
-  fontSize: number = 13,
+  fontSize: number,
 ): { cols: number; rows: number } {
   const charWidth = fontSize * 0.65;
   const lineHeight = fontSize * 1.2;
@@ -54,8 +57,10 @@ export function useAutoLaunch() {
     if (!enabled || !command || sessionIds.length === 0) return;
 
     const n = sessionIds.length;
-    // Scaled delay before first launch: min(1500, 500 + n*120) ms
-    const baseDelay = Math.min(1500, 500 + n * 120);
+    // Scaled delay before first launch: min(2000, 800 + n*300) ms — stacked
+    // on top of TerminalLayout's shell-startup wait to clear rc-file loading.
+    // Heavy shells (nvm, compinit, oh-my-zsh) can take 2-3s to fully start.
+    const baseDelay = Math.min(2000, 800 + n * 300);
 
     await new Promise(resolve => setTimeout(resolve, baseDelay));
 
@@ -74,7 +79,7 @@ export function useAutoLaunch() {
       try {
         // Send the command to the PTY
         await terminalSendCommand(sessionId, command);
-        // Mark as TUI so layout can auto-expand
+        // Mark as TUI so the layout can auto-expand the pane
         await terminalSetTui(sessionId, true);
       } catch (error) {
         console.error(`[useAutoLaunch] Failed to launch in ${sessionId}:`, error);

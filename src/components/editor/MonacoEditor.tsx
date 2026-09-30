@@ -23,7 +23,7 @@ import type { editor, IDisposable, Uri } from 'monaco-editor';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { getLanguageForPath, getLanguageLabel } from '@/lib/monaco/language';
-import { applyMonacoTheme } from '@/lib/monaco/theme';
+import { applyMonacoTheme, getMonacoThemeName } from '@/lib/monaco/theme';
 import { installMonacoEnvironment } from '@/lib/monaco/environment';
 import {
   createLspClient,
@@ -283,6 +283,7 @@ export function MonacoEditor({ filePath, content, onChange, onSave, onStatus }: 
         applyMonacoTheme(monaco, currentThemeKey);
 
         const instance = monaco.editor.create(container, {
+          theme: getMonacoThemeName(currentThemeKey),
           model: null,
           automaticLayout: true,
           fontSize,
@@ -440,7 +441,12 @@ export function MonacoEditor({ filePath, content, onChange, onSave, onStatus }: 
   // ── Theme changes ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!editorReady) return;
-    if (monacoRef.current) applyMonacoTheme(monacoRef.current, currentThemeKey);
+    if (monacoRef.current) {
+      applyMonacoTheme(monacoRef.current, currentThemeKey);
+      editorRef.current?.updateOptions({
+        theme: getMonacoThemeName(currentThemeKey),
+      });
+    }
   }, [editorReady, currentThemeKey]);
 
   // ── Settings changes ───────────────────────────────────────────────────────

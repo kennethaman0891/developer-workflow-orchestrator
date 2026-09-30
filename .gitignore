@@ -41,3 +41,13 @@ data/
 
 # Build artifacts
 *.dmg
+
+# Kubernetes secrets (never commit real values)
+k8s/secrets.yaml
+
+# IDE / Assistant local configs
+.claude/
+
+# Temporary screenshots / crops
+*_crop.png
+bright_top.png

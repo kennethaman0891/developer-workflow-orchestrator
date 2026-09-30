@@ -53,6 +53,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ansi-regex"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "74e74db1232b47053a58c3b009baf5d07cdb83354058af912eb6a30745c29081"
+dependencies = [
+ "regex",
+]
+
+[[package]]
 name = "anyhow"
 version = "1.0.104"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -908,6 +917,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "strip-ansi",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
@@ -3809,6 +3819,15 @@ dependencies = [
  "phf_shared",
  "proc-macro2",
  "quote",
+]
+
+[[package]]
+name = "strip-ansi"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4e397af0b9266a4e521ed5a4891cc715902af8dd221cba1a187f552bd044d970"
+dependencies = [
+ "ansi-regex",
 ]
 
 [[package]]

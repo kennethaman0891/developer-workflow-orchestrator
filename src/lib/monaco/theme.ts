@@ -35,33 +35,133 @@ function withAlpha(hex: string, alpha: number): string {
 }
 
 function buildRules(t: ThemeTokens): editor.ITokenThemeRule[] {
-  const { text, textMuted, accent, accentHover, success, warning } = t.colors;
+  const { text, textMuted, accent, accentHover, success, warning, error } = t.colors;
   const base = toHex6(text);
   const muted = toHex6(textMuted);
+  const kw = toHex6(accent);
+  const fn = toHex6(accentHover);
+  const str = toHex6(success);
+  const num = toHex6(warning);
+  const err = toHex6(error);
 
   return [
+    // Base default
     { token: '', foreground: base },
+    { token: 'invalid', foreground: err },
+    { token: 'emphasis', fontStyle: 'italic' },
+    { token: 'strong', fontStyle: 'bold' },
+
+    // Comments
     { token: 'comment', foreground: muted, fontStyle: 'italic' },
-    { token: 'keyword', foreground: toHex6(accent) },
-    { token: 'keyword.control', foreground: toHex6(accent) },
-    { token: 'string', foreground: toHex6(success) },
-    { token: 'string.escape', foreground: toHex6(accentHover) },
-    { token: 'number', foreground: toHex6(warning) },
-    { token: 'regexp', foreground: toHex6(warning) },
-    { token: 'type', foreground: toHex6(accentHover) },
-    { token: 'type.identifier', foreground: toHex6(accentHover) },
-    { token: 'namespace', foreground: toHex6(accentHover) },
-    { token: 'identifier', foreground: base },
-    { token: 'delimiter', foreground: muted },
+    { token: 'comment.html', foreground: muted, fontStyle: 'italic' },
+    { token: 'comment.content', foreground: muted, fontStyle: 'italic' },
+    { token: 'comment.content.html', foreground: muted, fontStyle: 'italic' },
+    { token: 'comment.css', foreground: muted, fontStyle: 'italic' },
+    { token: 'comment.js', foreground: muted, fontStyle: 'italic' },
+    { token: 'comment.ts', foreground: muted, fontStyle: 'italic' },
+
+    // Keywords & Operators
+    { token: 'keyword', foreground: kw },
+    { token: 'keyword.control', foreground: kw },
+    { token: 'keyword.operator', foreground: muted },
+    { token: 'keyword.other', foreground: kw },
+    { token: 'keyword.js', foreground: kw },
+    { token: 'keyword.ts', foreground: kw },
+    { token: 'keyword.css', foreground: kw },
+    { token: 'keyword.json', foreground: fn },
+    { token: 'keyword.flow', foreground: kw },
+    { token: 'keyword.flow.scss', foreground: kw },
     { token: 'operator', foreground: muted },
-    { token: 'attribute.name', foreground: toHex6(accent) },
-    { token: 'attribute.value', foreground: toHex6(success) },
-    { token: 'tag', foreground: toHex6(accent) },
+    { token: 'operator.scss', foreground: muted },
+    { token: 'operator.sql', foreground: muted },
+    { token: 'operator.swift', foreground: muted },
+    { token: 'delimiter', foreground: muted },
+    { token: 'delimiter.bracket', foreground: muted },
+    { token: 'delimiter.parenthesis', foreground: muted },
+    { token: 'delimiter.html', foreground: muted },
+    { token: 'delimiter.xml', foreground: muted },
+    { token: 'delimiter.css', foreground: muted },
+
+    // Strings & Characters
+    { token: 'string', foreground: str },
+    { token: 'string.escape', foreground: fn },
+    { token: 'string.regex', foreground: num },
+    { token: 'string.html', foreground: str },
+    { token: 'string.xml', foreground: str },
+    { token: 'string.css', foreground: str },
+    { token: 'string.scss', foreground: str },
+    { token: 'string.yaml', foreground: str },
+    { token: 'string.sql', foreground: str },
+    { token: 'string.key.json', foreground: kw },
+    { token: 'string.value.json', foreground: str },
+
+    // Numbers & Constants
+    { token: 'number', foreground: num },
+    { token: 'number.hex', foreground: num },
+    { token: 'number.octal', foreground: num },
+    { token: 'number.binary', foreground: num },
+    { token: 'number.float', foreground: num },
+    { token: 'regexp', foreground: num },
+    { token: 'constant', foreground: num },
+    { token: 'constant.character', foreground: num },
+    { token: 'constant.numeric', foreground: num },
+
+    // Types, Namespaces & Classes
+    { token: 'type', foreground: fn },
+    { token: 'type.identifier', foreground: fn },
+    { token: 'class', foreground: fn },
+    { token: 'namespace', foreground: fn },
+    { token: 'interface', foreground: fn },
+    { token: 'struct', foreground: fn },
+
+    // Functions & Identifiers
+    { token: 'function', foreground: fn },
+    { token: 'function.call', foreground: fn },
+    { token: 'member', foreground: fn },
+    { token: 'identifier', foreground: base },
     { token: 'variable', foreground: base },
-    { token: 'variable.predefined', foreground: toHex6(accentHover) },
-    { token: 'annotation', foreground: toHex6(warning) },
-    { token: 'metatag', foreground: toHex6(accent) },
-    { token: 'constant', foreground: toHex6(warning) },
+    { token: 'variable.predefined', foreground: fn },
+    { token: 'variable.parameter', foreground: fn },
+
+    // HTML / XML
+    { token: 'tag', foreground: kw },
+    { token: 'tag.html', foreground: kw },
+    { token: 'tag.xml', foreground: kw },
+    { token: 'metatag', foreground: kw },
+    { token: 'metatag.html', foreground: kw },
+    { token: 'metatag.xml', foreground: kw },
+    { token: 'metatag.content.html', foreground: fn },
+    { token: 'metatag.content.xml', foreground: fn },
+    { token: 'attribute.name', foreground: fn },
+    { token: 'attribute.name.html', foreground: fn },
+    { token: 'attribute.name.xml', foreground: fn },
+    { token: 'attribute.value', foreground: str },
+    { token: 'attribute.value.html', foreground: str },
+    { token: 'attribute.value.xml', foreground: str },
+
+    // CSS / SCSS / LESS
+    { token: 'tag.css', foreground: kw },
+    { token: 'tag.scss', foreground: kw },
+    { token: 'tag.less', foreground: kw },
+    { token: 'selector.css', foreground: kw },
+    { token: 'attribute.name.css', foreground: fn },
+    { token: 'attribute.name.scss', foreground: fn },
+    { token: 'attribute.name.less', foreground: fn },
+    { token: 'property.css', foreground: fn },
+    { token: 'attribute.value.css', foreground: str },
+    { token: 'attribute.value.number.css', foreground: num },
+    { token: 'attribute.value.unit.css', foreground: num },
+    { token: 'attribute.value.hex.css', foreground: num },
+    { token: 'variable.css', foreground: fn },
+    { token: 'variable.scss', foreground: fn },
+
+    // Annotations & Decorators
+    { token: 'annotation', foreground: num },
+    { token: 'decorator', foreground: num },
+
+    // Markdown
+    { token: 'header', foreground: kw, fontStyle: 'bold' },
+    { token: 'string.link', foreground: fn },
   ];
 }
 

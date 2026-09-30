@@ -78,7 +78,7 @@ const THEMES = [
   { id: 'dark', label: 'Dark', description: 'Classic dark', bg: '#0a0a0a', accent: '#4a9eff', text: '#e8e8e8' },
   { id: 'midnight', label: 'Midnight', description: 'Deep blue', bg: '#0d1b2a', accent: '#5ba4e6', text: '#e0e6ed' },
   { id: 'ocean', label: 'Ocean', description: 'Dracula-inspired', bg: '#1a1b26', accent: '#7aa2f7', text: '#c0caf5' },
-  { id: 'carbon', label: 'Carbon', description: 'IBM Carbon', bg: '#161616', accent: '#0062ff', text: '#f4f4f4' },
+  { id: 'carbon', label: 'Carbon', description: 'IBM Carbon', bg: '#161616', accent: '#4589ff', text: '#f4f4f4' },
 ];
 
 function ThemeCard({

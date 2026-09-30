@@ -23,9 +23,13 @@ export interface PanelProps {
   title: string;
   visible: boolean;
   isActive: boolean;
+  isMaximized?: boolean;
+  /** Session is running a TUI — xterm scrollback replay is skipped */
+  isTui?: boolean;
   onClose: () => void;
   onFocus: () => void;
   onMaximize: () => void;
+  onDragStart?: () => void;
   /** Called with new grid spans when the user finishes dragging the resize handle */
   onResize?: (spanCol: number, spanRow: number) => void;
   /** Grid container dimensions, used to convert pixel deltas to span changes */
@@ -39,9 +43,12 @@ export function TerminalPanel({
   title,
   visible,
   isActive,
+  isMaximized = false,
+  isTui = false,
   onClose,
   onFocus,
   onMaximize,
+  onDragStart,
   onResize,
   gridContainerRef,
   gridCols = 1,
@@ -132,6 +139,8 @@ export function TerminalPanel({
     >
       {/* Header */}
       <div
+        draggable={!isMaximized && !!onDragStart}
+        onDragStart={onDragStart}
         onMouseDown={onFocus}
         style={{
           display: 'flex',
@@ -140,7 +149,7 @@ export function TerminalPanel({
           padding: '6px 10px',
           background: headerBg,
           borderBottom: `1px solid ${borderColor}`,
-          cursor: 'pointer',
+          cursor: isMaximized ? 'default' : (onDragStart ? 'grab' : 'pointer'),
           userSelect: 'none',
           flexShrink: '0',
         }}
@@ -170,10 +179,10 @@ export function TerminalPanel({
         <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
           <button
             onClick={(e) => { e.stopPropagation(); onMaximize(); }}
-            title="Maximize"
+            title={isMaximized ? "Restore" : "Maximize"}
             style={btnStyle('#4a9eff')}
           >
-            ⛶
+            {isMaximized ? '❐' : '⛶'}
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); onClose(); }}
@@ -186,25 +195,31 @@ export function TerminalPanel({
       </div>
 
       {/* Terminal content */}
-      <div style={{ flex: 1, overflow: 'hidden', position: 'relative', minHeight: 0 }}>
-        <TerminalAnchor sessionId={id} />
+      <div
+        onMouseDown={onFocus}
+        onClick={onFocus}
+        style={{ flex: 1, overflow: 'hidden', position: 'relative', minHeight: 0 }}
+      >
+        <TerminalAnchor sessionId={id} isTui={isTui} />
       </div>
 
       {/* Resize handle (visual cue) */}
-      <div
-        onMouseDown={handleResizeStart}
-        style={{
-          position: 'absolute',
-          bottom: 0,
-          right: 0,
-          width: '12px',
-          height: '12px',
-          cursor: 'nwse-resize',
-          background: 'linear-gradient(135deg, transparent 50%, #4a9eff55 50%)',
-          borderRadius: '0 0 7px 0',
-          zIndex: 2,
-        }}
-      />
+      {!isMaximized && (
+        <div
+          onMouseDown={handleResizeStart}
+          style={{
+            position: 'absolute',
+            bottom: 0,
+            right: 0,
+            width: '12px',
+            height: '12px',
+            cursor: 'nwse-resize',
+            background: 'linear-gradient(135deg, transparent 50%, #4a9eff55 50%)',
+            borderRadius: '0 0 7px 0',
+            zIndex: 2,
+          }}
+        />
+      )}
     </div>
   );
 }

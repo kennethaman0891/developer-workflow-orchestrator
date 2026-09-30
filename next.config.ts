@@ -1,7 +1,9 @@
 import type { NextConfig } from 'next';
+import path from 'path';
 
 const nextConfig: NextConfig = {
   output: 'export',
+  outputFileTracingRoot: path.resolve(__dirname),
   images: {
     unoptimized: true,
   },
@@ -10,7 +12,6 @@ const nextConfig: NextConfig = {
     removeConsole: process.env.NODE_ENV === 'production',
   },
   webpack: (config) => {
-    const path = require('path');
     config.resolve.alias = {
       ...config.resolve.alias,
       '@': path.resolve(__dirname, 'src'),

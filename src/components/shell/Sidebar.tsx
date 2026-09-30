@@ -17,6 +17,8 @@ interface SidebarProps {
   onCloseWorkspace?: (id: string) => void;
   onActivateWorkspace?: (id: string) => void;
   onOpenHandoff?: () => void;
+  sidebarOpen?: boolean;
+  onSidebarToggle?: () => void;
 }
 
 const SECTION_LABEL_STYLE: React.CSSProperties = {
@@ -260,12 +262,21 @@ export function Sidebar({
   onCloseWorkspace,
   onActivateWorkspace,
   onOpenHandoff,
+  sidebarOpen = true,
+  onSidebarToggle,
 }: SidebarProps) {
   const { theme } = useTheme();
   const { currentUser, signOut } = useAuth();
   const [newWsName, setNewWsName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [localView, setLocalView] = useState(currentView);
+  // `isTauri()` is an environment check: false on the server, true inside
+  // the Tauri webview. Branching on it during render desyncs the SSR tree,
+  // so the flag is derived post-mount instead.
+  const [tauriMode, setTauriMode] = useState(false);
+  useEffect(() => {
+    setTauriMode(isTauri());
+  }, []);
 
   // Sync local nav highlight when the parent changes the real view
   useEffect(() => {
@@ -314,50 +325,98 @@ export function Sidebar({
         flexShrink: 0,
       }}
     >
-      {/* Logo */}
+      {/* Logo & Title + Sidebar Toggle */}
       <div
         style={{
           padding: '14px 16px',
           borderBottom: `1px solid ${theme.colors.border}`,
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
+          flexDirection: 'column',
+          alignItems: 'flex-start',
+          gap: '8px',
           flexShrink: 0,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '9px' }}>
+        {/* Row 1: Logo + Sidebar Toggle (inline) */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
           <img
             src="/logo.png"
             alt="DWO"
             style={{
-              width: '32px',
-              height: '32px',
-              borderRadius: '6px',
+              height: '36px',
+              width: 'auto',
+              maxHeight: '48px',
+              maxWidth: '100%',
+              borderRadius: '4px',
               objectFit: 'contain',
             }}
             onError={(e) => {
               e.currentTarget.style.display = 'none';
             }}
           />
-          <div>
-            <div
-              style={{
-                fontSize: '13px',
-                fontWeight: 700,
-                color: theme.colors.text,
-                letterSpacing: '0.02em',
-                lineHeight: 1.2,
-                display: 'flex',
-                alignItems: 'baseline',
-                gap: '4px',
-              }}
-            >
-              <span>DWO</span>
-              <span style={{ fontSize: '10px', fontWeight: 400, color: theme.colors.textMuted, letterSpacing: '0.01em' }}>
-                Developer Workflow
-              </span>
-            </div>
-          </div>
+          {/* Sidebar close button (hamburger/X) - inside sidebar */}
+          <button
+            onClick={() => onSidebarToggle?.()}
+            style={{
+              width: '32px',
+              height: '32px',
+              background: 'transparent',
+              border: 'none',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: theme.colors.textMuted,
+              transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+              opacity: 0.7,
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = theme.colors.bgTertiary;
+              e.currentTarget.style.opacity = '1';
+              e.currentTarget.style.color = theme.colors.text;
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = 'transparent';
+              e.currentTarget.style.opacity = '0.7';
+              e.currentTarget.style.color = theme.colors.textMuted;
+            }}
+            title={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+          >
+            {sidebarOpen ? (
+              // Close icon (X)
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+                <line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+              </svg>
+            ) : (
+              // Hamburger icon (☰)
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="2" y="3" width="12" height="1.5" rx="0.75" fill="currentColor" />
+                <rect x="2" y="7.25" width="12" height="1.5" rx="0.75" fill="currentColor" />
+                <rect x="2" y="11" width="12" height="1.5" rx="0.75" fill="currentColor" />
+              </svg>
+            )}
+          </button>
+        </div>
+
+        {/* Row 2: Name / Title */}
+        <div
+          style={{
+            fontSize: '13px',
+            fontWeight: 700,
+            color: theme.colors.text,
+            letterSpacing: '0.02em',
+            lineHeight: 1.2,
+            display: 'flex',
+            alignItems: 'baseline',
+            gap: '5px',
+          }}
+        >
+          <span>DWO</span>
+          <span style={{ fontSize: '10px', fontWeight: 400, color: theme.colors.textMuted, letterSpacing: '0.01em' }}>
+            Developer Workflow
+          </span>
         </div>
       </div>
 
@@ -638,7 +697,7 @@ export function Sidebar({
         )}
 
         {/* Session Handoff button — Tauri desktop mode only */}
-        {isTauri() && onOpenHandoff && (
+        {tauriMode && onOpenHandoff && (
           <div style={{ padding: '4px 12px 8px', flexShrink: 0 }}>
             <button
               onClick={onOpenHandoff}

@@ -17,6 +17,11 @@ interface TerminalPoolProps {
   autoLaunchCommand?: string | null;
   /** Whether auto-exec permission is enabled */
   autoLaunchEnabled?: boolean;
+  /**
+   * Called after auto-launch completes — lets the parent re-list sessions so
+   * `is_tui` reaches the TUI auto-expand effect promptly.
+   */
+  onAutoLaunched?: () => void;
   /** Called when the active terminal session changes — used by the handoff panel */
   onActiveSessionChange?: (id: string | null) => void;
 }
@@ -35,6 +40,7 @@ export function TerminalPool({
   onCloseSession,
   autoLaunchCommand,
   autoLaunchEnabled,
+  onAutoLaunched,
   onActiveSessionChange,
 }: TerminalPoolProps) {
   return (
@@ -45,6 +51,7 @@ export function TerminalPool({
       onCloseSession={(id) => onCloseSession?.(id)}
       autoLaunchCommand={autoLaunchCommand}
       autoLaunchEnabled={autoLaunchEnabled}
+      onAutoLaunched={onAutoLaunched}
       onActiveSessionChange={onActiveSessionChange}
     />
   );

@@ -51,13 +51,19 @@ export function useTerminalHandoff() {
     }
   }, []);
 
-  const inject = useCallback(async (targetId: string, artifactId: string): Promise<boolean> => {
+  /**
+   * Inject an artifact into a target terminal.
+   * Resolves `null` on success, or the backend's error message on failure
+   * (e.g. the target is running a TUI) so the caller can display the reason.
+   */
+  const inject = useCallback(async (targetId: string, artifactId: string): Promise<string | null> => {
     try {
       await invoke('handoff_inject', { targetId, artifactId });
-      return true;
+      return null;
     } catch (error) {
       console.error('Failed to inject handoff:', error);
-      return false;
+      const message = typeof error === 'string' ? error : (error as { message?: string })?.message;
+      return message || 'Failed to inject handoff';
     }
   }, []);
 

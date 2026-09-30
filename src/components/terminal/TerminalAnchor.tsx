@@ -1,19 +1,26 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import type { Terminal, ITerminalOptions } from 'xterm';
 import type { FitAddon } from 'xterm-addon-fit';
 import { invoke } from '@/lib/tauri';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { reportTerminalDims } from '@/lib/terminalDims';
 import 'xterm/css/xterm.css';
 import { useSettings } from '@/contexts/SettingsContext';
 
 interface TerminalAnchorProps {
   sessionId?: string;
   className?: string;
+  /**
+   * True when the session is running a TUI application. TUIs keep their own
+   * screen state (alt-screen, cursor control); replaying their scrollback into
+   * a fresh xterm would double-render stale frames, so replay is skipped.
+   */
+  isTui?: boolean;
 }
 
-export function TerminalAnchor({ sessionId, className = '' }: TerminalAnchorProps) {
+export function TerminalAnchor({ sessionId, className = '', isTui = false }: TerminalAnchorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<Terminal | null>(null);
@@ -22,6 +29,26 @@ export function TerminalAnchor({ sessionId, className = '' }: TerminalAnchorProp
   const sessionIdRef = useRef(sessionId);
   const canWriteRef = useRef(false); // guards against writes before init completes
   sessionIdRef.current = sessionId;
+  const isTuiRef = useRef(isTui);
+  isTuiRef.current = isTui;
+  // Resize dedup: send terminal_resize only when the fitted cols/rows change,
+  // collapsing the mount-time storm (init fit + fonts-ready + retry-fit +
+  // ResizeObserver) into one real resize per distinct size.
+  const lastSentDimsRef = useRef<string | null>(null);
+
+  /** Send terminal_resize to the PTY only when the fitted size actually changed. */
+  const sendResize = useCallback((id: string | undefined, cols: number, rows: number) => {
+    if (!id || cols <= 0 || rows <= 0) return;
+    const key = `${cols}x${rows}`;
+    if (lastSentDimsRef.current === key) return;
+    lastSentDimsRef.current = key;
+    invoke('terminal_resize', { id, cols, rows }).catch(console.error);
+  }, []);
+
+  // A new session starts from scratch — allow its first resize through.
+  useEffect(() => {
+    lastSentDimsRef.current = null;
+  }, [sessionId]);
 
   const { transparency, fontSize } = useSettings();
 
@@ -64,7 +91,7 @@ export function TerminalAnchor({ sessionId, className = '' }: TerminalAnchorProp
 
       const term = new Terminal({
         cursorBlink: true,
-        fontFamily: '"JetBrains Mono", "Fira Code", "Consolas", monospace',
+        fontFamily: '"JetBrains Mono", "Fira Code", "Consolas", "SF Mono", "Menlo", monospace',
         fontSize: fontSize,
         theme: {
           background: bgRgba,
@@ -103,6 +130,22 @@ export function TerminalAnchor({ sessionId, className = '' }: TerminalAnchorProp
         return;
       }
       fitAddon.fit();
+
+      // Ensure backend PTY is immediately synchronized with xterm's
+      // calculated dimensions, and record the fitted size for layout code.
+      reportTerminalDims(sessionIdRef.current ?? '', term.cols, term.rows);
+      sendResize(sessionIdRef.current, term.cols, term.rows);
+
+      // Re-fit once fonts have loaded in case character metrics changed
+      if (typeof document !== 'undefined' && document.fonts?.ready) {
+        document.fonts.ready.then(() => {
+          if (!disposedRef.current && fitAddonRef.current && termRef.current) {
+            fitAddonRef.current.fit();
+            reportTerminalDims(sessionIdRef.current ?? '', termRef.current.cols, termRef.current.rows);
+            sendResize(sessionIdRef.current, termRef.current.cols, termRef.current.rows);
+          }
+        });
+      }
 
       // Focus immediately and also after a short delay
       term.focus();
@@ -147,10 +190,8 @@ export function TerminalAnchor({ sessionId, className = '' }: TerminalAnchorProp
       };
 
       term.onResize(({ cols, rows }) => {
-        const id = sessionIdRef.current;
-        if (id) {
-          invoke('terminal_resize', { id, cols, rows }).catch(console.error);
-        }
+        reportTerminalDims(sessionIdRef.current ?? '', cols, rows);
+        sendResize(sessionIdRef.current, cols, rows);
       });
 
       // Forward keystrokes to the PTY
@@ -164,29 +205,60 @@ export function TerminalAnchor({ sessionId, className = '' }: TerminalAnchorProp
         }
       });
 
-      // Replay scrollback
-      if (sessionId) {
+      // ── Replay scrollback + stream live output ─────────────────────────
+      // Register the live listener FIRST, then fetch the scrollback snapshot,
+      // then write the replay. While the snapshot is in flight, live events
+      // are buffered; the Rust side appends to scrollback before emitting
+      // each output event, so the snapshot supersedes the buffered bytes and
+      // they are written together with the replay — no output is lost in the
+      // fetch window (the pre-fix ordering lost it entirely).
+      // TUI sessions keep their own screen state — replaying their
+      // scrollback into a fresh xterm would double-render stale frames, so
+      // replay is skipped for them.
+      const pendingEvents: string[] = [];
+      let awaitingSnapshot = !!(sessionId && !isTuiRef.current);
+
+      listen<{ session_id: string; data: string }>('terminal-output', (event) => {
+        if (disposedRef.current || event.payload.session_id !== sessionId) return;
+        if (awaitingSnapshot) {
+          pendingEvents.push(event.payload.data);
+          return;
+        }
+        writeChain = writeChain.then(() => {
+          if (!disposedRef.current) term.write(event.payload.data);
+        });
+      })
+        .then((unlisten) => {
+          if (disposedRef.current) unlisten();
+          else unlistenOutput = unlisten;
+        })
+        .catch(console.error);
+
+      if (sessionId && !isTuiRef.current) {
         invoke<string[]>('terminal_get_scrollback', { id: sessionId })
           .then((lines) => {
-            if (disposedRef.current || lines.length === 0) return;
+            awaitingSnapshot = false;
+            const tail = pendingEvents.join('');
+            pendingEvents.length = 0;
+            const replay = lines.length > 0 ? lines.join('\r\n') + '\r\n' : '';
+            if (disposedRef.current || (!replay && !tail)) return;
             writeChain = writeChain.then(() => {
-              if (!disposedRef.current) term.write(lines.join('\r\n') + '\r\n');
+              if (disposedRef.current) return;
+              if (replay) term.write(replay);
+              if (tail) term.write(tail);
             });
           })
-          .catch(console.error);
-
-        // Stream live output
-        listen<{ session_id: string; data: string }>('terminal-output', (event) => {
-          if (disposedRef.current || event.payload.session_id !== sessionId) return;
-          writeChain = writeChain.then(() => {
-            if (!disposedRef.current) term.write(event.payload.data);
+          .catch(() => {
+            // Snapshot failed — flush whatever buffered in the meantime;
+            // the live stream continues from here on.
+            awaitingSnapshot = false;
+            const tail = pendingEvents.join('');
+            pendingEvents.length = 0;
+            if (!tail || disposedRef.current) return;
+            writeChain = writeChain.then(() => {
+              if (!disposedRef.current) term.write(tail);
+            });
           });
-        })
-          .then((unlisten) => {
-            if (disposedRef.current) unlisten();
-            else unlistenOutput = unlisten;
-          })
-          .catch(console.error);
       }
     }).catch(console.error);
 
@@ -201,7 +273,7 @@ export function TerminalAnchor({ sessionId, className = '' }: TerminalAnchorProp
       fitAddonRef.current = null;
       term?.dispose();
     };
-  }, [sessionId]); // Only rebuild terminal on session change
+  }, [sessionId, sendResize]); // Only rebuild terminal on session change
 
   // ── Retry fit if container was 0×0 on first render ────────────────────────
   // This handles the case where the terminal mounts before its parent has
@@ -211,6 +283,7 @@ export function TerminalAnchor({ sessionId, className = '' }: TerminalAnchorProp
     if (!containerRef.current || !fitAddonRef.current) return;
 
     let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
 
     const tryFit = () => {
       if (cancelled) return;
@@ -218,19 +291,25 @@ export function TerminalAnchor({ sessionId, className = '' }: TerminalAnchorProp
       if (rect && rect.width > 0 && rect.height > 0) {
         // Container is live — fit once, then keep watching for resizes.
         fitAddonRef.current?.fit();
+        const id = sessionIdRef.current;
+        if (id && termRef.current && termRef.current.cols > 0 && termRef.current.rows > 0) {
+          reportTerminalDims(id, termRef.current.cols, termRef.current.rows);
+          sendResize(id, termRef.current.cols, termRef.current.rows);
+        }
         return;
       }
-      // Container still 0×0 (likely display:none) — retry for up to ~5 s.
-      setTimeout(tryFit, 100);
+      // Container still 0×0 (likely display:none) — keep retrying until it
+      // gets a real size (or the effect unmounts).
+      timer = setTimeout(tryFit, 100);
     };
 
     // Fire after paint, then every 100 ms until the container has real size.
-    const timer = setTimeout(tryFit, 100);
+    timer = setTimeout(tryFit, 100);
     return () => {
       cancelled = true;
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
     };
-  }, [sessionId]);
+  }, [sessionId, sendResize]);
 
   // Reactively update transparency and font-size without tearing down the
   // terminal instance. Runs on every settings change after initial mount.
@@ -268,11 +347,19 @@ export function TerminalAnchor({ sessionId, className = '' }: TerminalAnchorProp
     if (!container) return;
 
     const handleFocus = () => {
-      termRef.current?.focus();
+      if (termRef.current) {
+        termRef.current.focus();
+      }
+      const textarea = container?.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement | null;
+      textarea?.focus();
     };
 
     const handleClick = () => {
-      termRef.current?.focus();
+      if (termRef.current) {
+        termRef.current.focus();
+      }
+      const textarea = container?.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement | null;
+      textarea?.focus();
     };
 
     container.addEventListener('focus', handleFocus);
@@ -307,7 +394,6 @@ export function TerminalAnchor({ sessionId, className = '' }: TerminalAnchorProp
         cursor: 'text',
         outline: 'none',
       }}
-      tabIndex={0}
     >
       <div ref={terminalRef} style={{ width: '100%', height: '100%' }} />
     </div>

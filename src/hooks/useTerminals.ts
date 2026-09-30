@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { invoke } from '@/lib/tauri';
 import { getDefaultShell } from '@/lib/shell';
+import { forgetTerminalDims } from '@/lib/terminalDims';
 import type { SessionMeta } from '@/lib/terminal';
 
 export type { SessionMeta };
@@ -51,6 +52,7 @@ export function useTerminals() {
   const close = useCallback(async (id: string) => {
     try {
       await invoke('terminal_close', { id });
+      forgetTerminalDims(id);
       await list();
       if (activeId === id) {
         setActiveId(null);

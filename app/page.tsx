@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { Sidebar } from '@/components/shell/Sidebar';
 import { TerminalPool } from '@/components/terminal/TerminalPool';
 import { useTerminals } from '@/hooks/useTerminals';
@@ -13,7 +13,6 @@ import { IDEView } from '@/views/ide/IDEView';
 import { useWorkspaces } from '@/contexts/WorkspacesContext';
 import { WorkspacesProvider } from '@/contexts/WorkspacesContext';
 import { SettingsProvider } from '@/contexts/SettingsContext';
-import { ThemeProvider } from '@/contexts/ThemeContext';
 import { WizardView } from '@/components/workspace/WizardView';
 import { HandoffPanel } from '@/components/handoff/HandoffPanel';
 import { terminalCreate } from '@/lib/terminal';
@@ -22,22 +21,31 @@ import { isTauri } from '@/lib/tauri';
 type MainView = 'projects' | 'workspace' | 'grid' | 'ide' | 'collaboration' | 'settings';
 
 function AppShell() {
-  // Persist sidebar open/closed state across sessions via localStorage
-  const getInitialSidebarOpen = (): boolean => {
-    try {
-      const saved = localStorage.getItem('dwo-sidebar-open');
-      if (saved !== null) return saved === 'true';
-    } catch {}
-    return true; // default: sidebar open on first visit
-  };
-  const [sidebarOpen, setSidebarOpen] = useState(getInitialSidebarOpen);
+  // Sidebar open/closed state — default open on first visit. The initializer
+  // stays SSR-safe (a constant); the persisted value hydrates after mount so
+  // the server-rendered tree matches the client's first render.
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mainView, setMainView] = useState<MainView>('workspace');
   const [showWizard, setShowWizard] = useState(false);
   const [handoffOpen, setHandoffOpen] = useState(false);
   const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null);
 
-  // Persist sidebar state whenever it changes
+  // Hydrate persisted sidebar state post-mount (see note above)
   useEffect(() => {
+    try {
+      const saved = localStorage.getItem('dwo-sidebar-open');
+      if (saved !== null) setSidebarOpen(saved === 'true');
+    } catch {}
+  }, []);
+
+  // Persist sidebar state whenever it changes — skipping the pre-hydration
+  // mount save so a stored "closed" state can't be clobbered by the default.
+  const firstSidebarPersistRef = useRef(true);
+  useEffect(() => {
+    if (firstSidebarPersistRef.current) {
+      firstSidebarPersistRef.current = false;
+      return;
+    }
     try {
       localStorage.setItem('dwo-sidebar-open', String(sidebarOpen));
     } catch {}
@@ -57,6 +65,13 @@ function AppShell() {
 
   // Get the active workspace object
   const activeWorkspace = activeId ? workspaces.find(w => w.id === activeId) : null;
+
+  // Active workspace's sessions (falls back to all if none explicitly bound)
+  const activeSessions = useMemo(() => {
+    if (!activeId) return sessions;
+    const bound = sessions.filter(s => s.workspace_id === activeId);
+    return bound.length > 0 ? bound : sessions;
+  }, [sessions, activeId]);
 
   // ── Workspace close with terminal cleanup ────────────────────────────────────
   const handleCloseWorkspace = useCallback(async (id: string) => {
@@ -129,7 +144,7 @@ function AppShell() {
     init().catch(console.error);
   }, [loadWorkspaces, updateWs, createWs, getLaunchCwd]);
 
-  // ── Ensure at least one terminal exists when a workspace is active ─────────
+  // ── Ensure template terminal count exists when a workspace is active ───────
   // Created immediately — no delay, no stale-closure issues.
   const createdForRef = useRef<Set<string>>(new Set());
   useEffect(() => {
@@ -138,17 +153,19 @@ function AppShell() {
     createdForRef.current.add(activeId);
     (async () => {
       const current = await listTerminals();
-      const bound = current.some(s => s.workspace_id === activeId);
-      if (!bound) {
+      const bound = current.filter(s => s.workspace_id === activeId);
+      const targetCount = activeWorkspace.template && activeWorkspace.template > 0 ? activeWorkspace.template : 1;
+      const needed = targetCount - bound.length;
+      if (needed > 0) {
         const cwd = activeWorkspace.path ?? undefined;
         const wsId = activeWorkspace.id;
-        const id = await terminalCreate({ cwd, workspaceId: wsId });
-        if (id) {
-          await listTerminals();
+        for (let i = 0; i < needed; i++) {
+          await terminalCreate({ cwd, workspaceId: wsId });
         }
+        await listTerminals();
       }
     })().catch(console.error);
-  }, [activeId, activeWorkspace?.path, activeWorkspace?.id, listTerminals]);
+  }, [activeId, activeWorkspace?.path, activeWorkspace?.id, activeWorkspace?.template, listTerminals]);
 
   // Cmd+T → open wizard
   useEffect(() => {
@@ -174,6 +191,62 @@ function AppShell() {
       overflow: 'hidden',
       transition: 'background 0.2s, color 0.2s',
     }}>
+      {/* Top strip — holds the sidebar toggle IN-FLOW so it can never
+          overlap sidebar or terminal content (replaces the old fixed button) */}
+      <div style={{
+        height: '44px',
+        flexShrink: 0,
+        display: 'flex',
+        alignItems: 'center',
+        paddingLeft: '12px',
+        background: 'var(--dwo-color-bg, #0a0a0a)',
+        borderBottom: '1px solid #1a1a1a',
+      }}>
+        <button
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          style={{
+            width: '36px',
+            height: '36px',
+            background: '#111111',
+            border: 'none',
+            borderBottom: '1px solid #2a2a2a',
+            borderRight: '1px solid #2a2a2a',
+            borderRadius: '0 0 8px 0',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: sidebarOpen ? '#888888' : '#4a9eff',
+            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+            opacity: 0.8,
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.background = '#1a1a1a';
+            e.currentTarget.style.opacity = '1';
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.background = '#111111';
+            e.currentTarget.style.opacity = '0.8';
+          }}
+          title={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+        >
+          {sidebarOpen ? (
+            // Close icon (X)
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+              <line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+            </svg>
+          ) : (
+            // Hamburger icon (☰)
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="2" y="3" width="12" height="1.5" rx="0.75" fill="currentColor" />
+              <rect x="2" y="7.25" width="12" height="1.5" rx="0.75" fill="currentColor" />
+              <rect x="2" y="11" width="12" height="1.5" rx="0.75" fill="currentColor" />
+            </svg>
+          )}
+        </button>
+      </div>
+
       {/* Phase 5: Diagnostics/Error Reporting */}
       <ErrorReporter />
 
@@ -233,75 +306,26 @@ function AppShell() {
             overflow: 'hidden',
           }}>
             <TerminalPool
-              sessions={sessions}
+              sessions={activeSessions}
               layoutKey={activeId ? `dwo-layout-${activeId}` : undefined}
               onCreateTerminal={createTerminalForWorkspace}
               onCloseSession={(id) => closeTerminal(id)}
               autoLaunchCommand={activeWorkspace?.command}
               autoLaunchEnabled={true}
+              onAutoLaunched={() => { void listTerminals(); }}
               onActiveSessionChange={setActiveTerminalId}
             />
           </div>
 
-          {/* Phase 7: IDE View */}
-          {mainView === 'ide' && (
+          {/* Phase 7: IDE View — kept mounted so tabs and editor state survive view switches */}
+          <div style={{ display: mainView === 'ide' ? 'flex' : 'none', flex: 1, minHeight: 0, height: '100%', flexDirection: 'column' }}>
             <ErrorBoundary label="IDE">
               <IDEView initialPath={activeWorkspace?.path || undefined} />
             </ErrorBoundary>
-          )}
+          </div>
         </main>
       </div>
     </div>
-
-    {/* Sidebar toggle — ALWAYS visible as a permanent fixture */}
-    <button
-      onClick={() => setSidebarOpen(!sidebarOpen)}
-      style={{
-        position: 'fixed',
-        left: 0,
-        top: '12px',
-        width: '36px',
-        height: '36px',
-        background: '#111111',
-        border: 'none',
-        borderBottom: '1px solid #2a2a2a',
-        borderRight: '1px solid #2a2a2a',
-        borderRadius: '0 0 8px 0',
-        cursor: 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: sidebarOpen ? '#888888' : '#4a9eff',
-        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-        zIndex: 1000,
-        boxShadow: '2px 2px 8px rgba(0,0,0,0.3)',
-        opacity: 0.8,
-      }}
-      onMouseEnter={e => {
-        e.currentTarget.style.background = '#1a1a1a';
-        e.currentTarget.style.opacity = '1';
-      }}
-      onMouseLeave={e => {
-        e.currentTarget.style.background = '#111111';
-        e.currentTarget.style.opacity = '0.8';
-      }}
-      title={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
-    >
-      {sidebarOpen ? (
-        // Close icon (X)
-        <svg width="18" height="18" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
-          <line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
-        </svg>
-      ) : (
-        // Hamburger icon (☰)
-        <svg width="18" height="18" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect x="2" y="3" width="12" height="1.5" rx="0.75" fill="currentColor" />
-          <rect x="2" y="7.25" width="12" height="1.5" rx="0.75" fill="currentColor" />
-          <rect x="2" y="11" width="12" height="1.5" rx="0.75" fill="currentColor" />
-        </svg>
-      )}
-    </button>
 
     {/* Session handoff panel — app-level overlay, triggered from the sidebar */}
     {handoffOpen && (
@@ -317,12 +341,10 @@ function AppShell() {
 
 export default function Home() {
   return (
-    <ThemeProvider>
-      <SettingsProvider>
-        <WorkspacesProvider>
-          <AppShell />
-        </WorkspacesProvider>
-      </SettingsProvider>
-    </ThemeProvider>
+    <SettingsProvider>
+      <WorkspacesProvider>
+        <AppShell />
+      </WorkspacesProvider>
+    </SettingsProvider>
   );
 }

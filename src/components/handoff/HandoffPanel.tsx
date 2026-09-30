@@ -33,6 +33,8 @@ export function HandoffPanel({ sessions, activeId, onClose }: HandoffPanelProps)
   const [showCaptureNotes, setShowCaptureNotes] = useState(false);
   const [captureNotes, setCaptureNotes] = useState('');
   const [captureTitle, setCaptureTitle] = useState('');
+  /** Per-artifact target selection (defaults to primaryTarget until chosen). */
+  const [targetIds, setTargetIds] = useState<Record<string, string>>({});
 
   const primaryTarget = activeId || sessions[0]?.id || '';
 
@@ -53,13 +55,13 @@ export function HandoffPanel({ sessions, activeId, onClose }: HandoffPanelProps)
     if (!targetId) return;
     setError(null);
     setInjecting(artifactId);
-    const ok = await inject(targetId, artifactId);
+    const failure = await inject(targetId, artifactId);
     setInjecting(null);
-    if (ok) {
+    if (failure === null) {
       setInjected(artifactId);
       setTimeout(() => setInjected(null), 2000);
     } else {
-      setError(`Injection into '${targetId.slice(0, 6)}…' failed — is the terminal still open?`);
+      setError(failure);
     }
   }, [inject]);
 
@@ -260,28 +262,60 @@ export function HandoffPanel({ sessions, activeId, onClose }: HandoffPanelProps)
                 </div>
                 <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '6px' }}>
                   {sessions.length > 0 ? (
-                    <select
-                      value={primaryTarget}
-                      onChange={(e) => handleInject(artifact.id, e.target.value)}
-                      disabled={injecting === artifact.id}
-                      title="Pick a target terminal, then it injects automatically"
-                      style={{
-                        flex: 1,
-                        minWidth: 0,
-                        background: '#0a0a0a',
-                        border: injecting === artifact.id ? '1px solid #4a9eff' : '1px solid #2a2a2a',
-                        color: injecting === artifact.id ? '#4a9eff' : '#aaa',
-                        padding: '2px 4px',
-                        borderRadius: '3px',
-                        fontSize: '11px',
-                        cursor: injecting === artifact.id ? 'wait' : 'pointer',
-                        outline: 'none',
-                      }}
-                    >
-                      {sessions.map((s) => (
-                        <option key={s.id} value={s.id}>→ Inject into: {s.title}</option>
-                      ))}
-                    </select>
+                    (() => {
+                      const targetId = targetIds[artifact.id] || primaryTarget;
+                      const target = sessions.find((s) => s.id === targetId);
+                      const targetIsTui = !!target?.is_tui;
+                      return (
+                        <>
+                          <select
+                            value={targetId}
+                            onChange={(e) => setTargetIds((prev) => ({ ...prev, [artifact.id]: e.target.value }))}
+                            disabled={injecting === artifact.id}
+                            title="Pick the target terminal — nothing happens until you press Inject"
+                            style={{
+                              flex: 1,
+                              minWidth: 0,
+                              background: '#0a0a0a',
+                              border: '1px solid #2a2a2a',
+                              color: '#aaa',
+                              padding: '2px 4px',
+                              borderRadius: '3px',
+                              fontSize: '11px',
+                              cursor: 'pointer',
+                              outline: 'none',
+                            }}
+                          >
+                            {sessions.map((s) => (
+                              <option key={s.id} value={s.id}>
+                                → {s.title}{s.is_tui ? ' (TUI)' : ''}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={() => handleInject(artifact.id, targetId)}
+                            disabled={injecting === artifact.id || targetIsTui || !targetId}
+                            title={
+                              targetIsTui
+                                ? 'Target is a TUI session — pick a plain shell terminal'
+                                : `Inject into ${target?.title ?? 'terminal'}`
+                            }
+                            style={{
+                              background: injecting === artifact.id ? '#4a9eff66' : targetIsTui ? '#333' : '#4a9eff22',
+                              border: targetIsTui ? '1px solid #2a2a2a' : '1px solid #4a9eff44',
+                              color: targetIsTui ? '#555' : '#4a9eff',
+                              padding: '2px 6px',
+                              borderRadius: '3px',
+                              cursor: injecting === artifact.id ? 'wait' : targetIsTui ? 'not-allowed' : 'pointer',
+                              fontSize: '11px',
+                              fontWeight: 500,
+                            }}
+                          >
+                            {injecting === artifact.id ? '…' : 'Inject'}
+                          </button>
+                        </>
+                      );
+                    })()
                   ) : (
                     <div style={{ fontSize: '11px', color: '#666', flex: 1 }}>No terminals open</div>
                   )}

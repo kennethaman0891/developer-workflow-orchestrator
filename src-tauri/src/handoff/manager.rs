@@ -135,6 +135,19 @@ impl HandoffManager {
             format!("Artifact not found: {}", artifact_id)
         })?;
 
+        // Refuse to dump a heredoc into a running TUI — its stdin belongs to
+        // the program (claude, vim, htop, …), not to a shell prompt, and the
+        // injected bytes would corrupt the live session.
+        let target_meta = term_mgr.get_meta(target_id).ok_or_else(|| {
+            format!("Target session not found: {}", target_id)
+        })?;
+        if target_meta.is_tui {
+            return Err(format!(
+                "Cannot inject into '{}': it is running a TUI — pick a plain shell terminal",
+                target_meta.title
+            ));
+        }
+
         // Only include the last MAX_INJECT_LINES lines of scrollback.
         let tail_lines: Vec<&str> = artifact
             .scrollback

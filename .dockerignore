@@ -28,3 +28,7 @@ tests/
 docs/
 DOCKER_K8S_PLAN.md
 WINDOWS_SETUP.md
+*.dmg
+.claude
+.playwright-mcp/
+k8s/secrets.yaml

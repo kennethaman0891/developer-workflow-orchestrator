@@ -103,6 +103,86 @@ function getFileCategory(path: string): FileCategory {
   return 'code';
 }
 
+function ImageViewer({ filePath, theme }: { filePath: string; theme: any }) {
+  const [hasError, setHasError] = useState(false);
+  const imageUrl = `file://${filePath}`;
+
+  if (hasError) {
+    return (
+      <div style={{
+        height: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: theme.colors.bg,
+        padding: '20px',
+      }}>
+        <div style={{ textAlign: 'center', color: '#888' }}>
+          <div style={{ fontSize: '48px', marginBottom: '12px' }}>🖼️</div>
+          <div>Failed to load image</div>
+          <div style={{ fontSize: '11px', color: '#555', marginTop: '8px' }}>{filePath}</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      height: '100%',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: theme.colors.bg,
+      overflow: 'auto',
+      padding: '20px',
+    }}>
+      <img
+        src={imageUrl}
+        alt={filePath}
+        style={{
+          maxWidth: '100%',
+          maxHeight: '100%',
+          objectFit: 'contain',
+          borderRadius: '4px',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+        }}
+        onError={() => setHasError(true)}
+      />
+    </div>
+  );
+}
+
+function PdfViewer({ filePath }: { filePath: string }) {
+  const [hasError, setHasError] = useState(false);
+  const pdfUrl = `file://${filePath}`;
+
+  if (hasError) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#888' }}>
+        <LargePlaceholder type="pdf" />
+        <div>PDF preview not available</div>
+        <div style={{ fontSize: '11px', color: '#555', marginTop: '8px' }}>Use your system&apos;s PDF viewer</div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <iframe
+        src={pdfUrl}
+        style={{
+          flex: 1,
+          width: '100%',
+          border: 'none',
+          background: '#fff',
+        }}
+        title={filePath}
+        onError={() => setHasError(true)}
+      />
+    </div>
+  );
+}
+
 /**
  * Render appropriate viewer based on file type
  */
@@ -122,73 +202,11 @@ function FileViewer({
   const { theme } = useTheme();
 
   if (category === 'image') {
-    const imageUrl = `file://${filePath}`;
-    return (
-      <div style={{
-        height: '100%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: theme.colors.bg,
-        overflow: 'auto',
-        padding: '20px',
-      }}>
-        <img
-          src={imageUrl}
-          alt={filePath}
-          style={{
-            maxWidth: '100%',
-            maxHeight: '100%',
-            objectFit: 'contain',
-            borderRadius: '4px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-          }}
-          onError={(e) => {
-            e.currentTarget.style.display = 'none';
-            const parent = e.currentTarget.parentElement;
-            if (parent) {
-              parent.innerHTML = `
-                <div style="text-align: center; color: #888;">
-                  <div style="font-size: 48px; margin-bottom: 12px;">🖼️</div>
-                  <div>Failed to load image</div>
-                  <div style="font-size: 11px; color: #555; margin-top: 8px;">${filePath}</div>
-                </div>
-              `;
-            }
-          }}
-        />
-      </div>
-    );
+    return <ImageViewer filePath={filePath} theme={theme} />;
   }
 
   if (category === 'pdf') {
-    const pdfUrl = `file://${filePath}`;
-    return (
-      <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-        <iframe
-          src={pdfUrl}
-          style={{
-            flex: 1,
-            width: '100%',
-            border: 'none',
-            background: '#fff',
-          }}
-          title={filePath}
-          onError={() => {
-            const container = document.getElementById('pdf-container');
-            if (container) {
-              container.innerHTML = `
-                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #888;">
-                  <LargePlaceholder type="pdf" />
-                  <div>PDF preview not available</div>
-                  <div style="font-size: 11px; color: #555; margin-top: 8px;">Use your system's PDF viewer</div>
-                </div>
-              `;
-            }
-          }}
-        />
-      </div>
-    );
+    return <PdfViewer filePath={filePath} />;
   }
 
   if (category === 'other') {
