@@ -23,6 +23,81 @@ function formatTimeAgo(dateStr: string): string {
   return `${Math.floor(diffHrs / 24)}d ago`;
 }
 
+/**
+ * Stable per-artifact target picker.
+ * Previously an IIFE inside `artifacts.map` returned a fresh fragment every
+ * render, remounting the <select> and dropping focus on each keystroke or
+ * poll. A named component with a stable identity preserves DOM + focus.
+ */
+function HandoffTargetPicker({
+  artifactId,
+  sessions,
+  targetId,
+  disabled,
+  onSelect,
+  onInject,
+}: {
+  artifactId: string;
+  sessions: SessionMeta[];
+  targetId: string;
+  disabled: boolean;
+  onSelect: (artifactId: string, targetId: string) => void;
+  onInject: (artifactId: string, targetId: string) => void;
+}) {
+  const target = sessions.find((s) => s.id === targetId);
+  const targetIsTui = !!target?.is_tui;
+  return (
+    <>
+      <select
+        value={targetId}
+        onChange={(e) => onSelect(artifactId, e.target.value)}
+        disabled={disabled}
+        title="Pick the target terminal — nothing happens until you press Inject"
+        style={{
+          flex: 1,
+          minWidth: 0,
+          background: '#0a0a0a',
+          border: '1px solid #2a2a2a',
+          color: '#aaa',
+          padding: '2px 4px',
+          borderRadius: '3px',
+          fontSize: '11px',
+          cursor: 'pointer',
+          outline: 'none',
+        }}
+      >
+        {sessions.map((s) => (
+          <option key={s.id} value={s.id}>
+            → {s.title}{s.is_tui ? ' (TUI)' : ''}
+          </option>
+        ))}
+      </select>
+      <button
+        onClick={() => onInject(artifactId, targetId)}
+        disabled={disabled || targetIsTui || !targetId}
+        title={
+          targetIsTui
+            ? 'Target is a TUI session — pick a plain shell terminal'
+            : `Inject into ${target?.title ?? 'terminal'}`
+        }
+        className="dwo-handoff-inject"
+        style={{
+          background: disabled ? '#4a9eff66' : targetIsTui ? '#333' : '#4a9eff22',
+          border: targetIsTui ? '1px solid #2a2a2a' : '1px solid #4a9eff44',
+          color: targetIsTui ? '#555' : '#4a9eff',
+          padding: '2px 6px',
+          borderRadius: '3px',
+          cursor: disabled ? 'wait' : targetIsTui ? 'not-allowed' : 'pointer',
+          fontSize: '11px',
+          fontWeight: 500,
+        }}
+      >
+        {disabled ? '…' : 'Inject'}
+      </button>
+    </>
+  );
+}
+
 export function HandoffPanel({ sessions, activeId, onClose }: HandoffPanelProps) {
   const { artifacts, capture, inject, remove, getArtifact, selected, setSelected } =
     useTerminalHandoff();
@@ -65,10 +140,17 @@ export function HandoffPanel({ sessions, activeId, onClose }: HandoffPanelProps)
     }
   }, [inject]);
 
-  const handleDelete = useCallback((artifactId: string) => {
-    remove(artifactId);
-    if (showView === artifactId) setShowView(null);
-  }, [remove, showView]);
+  const handleSelectTarget = useCallback((artifactId: string, targetId: string) => {
+    setTargetIds((prev) => ({ ...prev, [artifactId]: targetId }));
+  }, []);
+
+  const handleDelete = useCallback(
+    (artifactId: string) => {
+      remove(artifactId);
+      if (showView === artifactId) setShowView(null);
+    },
+    [remove, showView],
+  );
 
   const handleView = useCallback(async (artifact: SessionSummary) => {
     setError(null);
@@ -110,6 +192,7 @@ export function HandoffPanel({ sessions, activeId, onClose }: HandoffPanelProps)
         <button
           onClick={onClose}
           title="Close handoff panel"
+          className="dwo-icon-btn dwo-close-btn"
           style={{
             background: 'transparent',
             border: 'none',
@@ -119,8 +202,6 @@ export function HandoffPanel({ sessions, activeId, onClose }: HandoffPanelProps)
             padding: '2px 4px',
             borderRadius: '3px',
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = '#e8e8e8'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = '#888'; }}
         >
           ✕
         </button>
@@ -262,60 +343,14 @@ export function HandoffPanel({ sessions, activeId, onClose }: HandoffPanelProps)
                 </div>
                 <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginTop: '6px' }}>
                   {sessions.length > 0 ? (
-                    (() => {
-                      const targetId = targetIds[artifact.id] || primaryTarget;
-                      const target = sessions.find((s) => s.id === targetId);
-                      const targetIsTui = !!target?.is_tui;
-                      return (
-                        <>
-                          <select
-                            value={targetId}
-                            onChange={(e) => setTargetIds((prev) => ({ ...prev, [artifact.id]: e.target.value }))}
-                            disabled={injecting === artifact.id}
-                            title="Pick the target terminal — nothing happens until you press Inject"
-                            style={{
-                              flex: 1,
-                              minWidth: 0,
-                              background: '#0a0a0a',
-                              border: '1px solid #2a2a2a',
-                              color: '#aaa',
-                              padding: '2px 4px',
-                              borderRadius: '3px',
-                              fontSize: '11px',
-                              cursor: 'pointer',
-                              outline: 'none',
-                            }}
-                          >
-                            {sessions.map((s) => (
-                              <option key={s.id} value={s.id}>
-                                → {s.title}{s.is_tui ? ' (TUI)' : ''}
-                              </option>
-                            ))}
-                          </select>
-                          <button
-                            onClick={() => handleInject(artifact.id, targetId)}
-                            disabled={injecting === artifact.id || targetIsTui || !targetId}
-                            title={
-                              targetIsTui
-                                ? 'Target is a TUI session — pick a plain shell terminal'
-                                : `Inject into ${target?.title ?? 'terminal'}`
-                            }
-                            style={{
-                              background: injecting === artifact.id ? '#4a9eff66' : targetIsTui ? '#333' : '#4a9eff22',
-                              border: targetIsTui ? '1px solid #2a2a2a' : '1px solid #4a9eff44',
-                              color: targetIsTui ? '#555' : '#4a9eff',
-                              padding: '2px 6px',
-                              borderRadius: '3px',
-                              cursor: injecting === artifact.id ? 'wait' : targetIsTui ? 'not-allowed' : 'pointer',
-                              fontSize: '11px',
-                              fontWeight: 500,
-                            }}
-                          >
-                            {injecting === artifact.id ? '…' : 'Inject'}
-                          </button>
-                        </>
-                      );
-                    })()
+                    <HandoffTargetPicker
+                      artifactId={artifact.id}
+                      sessions={sessions}
+                      targetId={targetIds[artifact.id] || primaryTarget}
+                      disabled={injecting === artifact.id}
+                      onSelect={handleSelectTarget}
+                      onInject={handleInject}
+                    />
                   ) : (
                     <div style={{ fontSize: '11px', color: '#666', flex: 1 }}>No terminals open</div>
                   )}

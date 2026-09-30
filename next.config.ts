@@ -9,7 +9,10 @@ const nextConfig: NextConfig = {
   },
   trailingSlash: true,
   compiler: {
-    removeConsole: process.env.NODE_ENV === 'production',
+    removeConsole:
+      process.env.NODE_ENV === 'production'
+        ? { exclude: ['error', 'warn'] }
+        : false,
   },
   webpack: (config) => {
     config.resolve.alias = {

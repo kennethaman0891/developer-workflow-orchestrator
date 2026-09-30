@@ -16,16 +16,48 @@ const THEME_PREFIX = 'dwo-';
 
 const HEX_RE = /^#[0-9a-f]{6}$/i;
 
-/** Normalise any hex colour to `#rrggbb` (Monaco rejects `#rgb` and alpha in rules). */
-function toHex6(value: string): string {
-  const v = value.trim();
-  if (HEX_RE.test(v)) return v.toLowerCase();
+/** Minimal named-colour table for tokens that use CSS keywords. */
+const NAMED_COLORS: Record<string, string> = {
+  black: '#000000',
+  white: '#ffffff',
+  red: '#ff0000',
+  green: '#008000',
+  blue: '#0000ff',
+  grey: '#808080',
+  gray: '#808080',
+  transparent: '#000000',
+};
+
+function clampByte(n: number): string {
+  return Math.round(Math.max(0, Math.min(255, n)))
+    .toString(16)
+    .padStart(2, '0');
+}
+
+/**
+ * Normalise any CSS colour to `#rrggbb` (Monaco rejects `#rgb` and alpha in rules).
+ * Handles `#rgb`, `#rrggbb`, `#rrggbbaa`, `rgb()/rgba()` and named colours.
+ * Unrecognised input falls back to `fallback` (default neutral grey) rather
+ * than throwing — a single bad token must never grey out the whole editor.
+ */
+function toHex6(value: string, fallback = '#c0c0c0'): string {
+  const v = value.trim().toLowerCase();
+  if (HEX_RE.test(v)) return v;
   if (/^#[0-9a-f]{3}$/i.test(v)) {
     const [, r, g, b] = v;
-    return `#${r}${r}${g}${g}${b}${b}`.toLowerCase();
+    return `#${r}${r}${g}${g}${b}${b}`;
   }
-  // Unrecognised input — fall back to a neutral grey rather than throwing.
-  return '#c0c0c0';
+  if (/^#[0-9a-f]{8}$/i.test(v)) {
+    // Strip alpha — rules carry no alpha channel.
+    return v.slice(0, 7);
+  }
+  const rgb = v.match(/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)(?:\s*,\s*[\d.]+\s*)?\)$/);
+  if (rgb) {
+    return `#${clampByte(Number(rgb[1]))}${clampByte(Number(rgb[2]))}${clampByte(Number(rgb[3]))}`;
+  }
+  if (NAMED_COLORS[v]) return NAMED_COLORS[v];
+  console.warn(`[monaco-theme] unrecognised colour "${value}", using ${fallback}`);
+  return fallback;
 }
 
 /** Append an alpha channel (`#rrggbb` + 2 hex digits) for translucent editor colours. */

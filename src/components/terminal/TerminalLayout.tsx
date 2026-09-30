@@ -100,6 +100,7 @@ function VDivider({ pos, onPosChange }: VDividerProps) {
     <div
       onMouseDown={handleMouseDown}
       data-split-container="true"
+      className="dwo-divider-v"
       style={{
         height: '6px',
         cursor: 'row-resize',
@@ -107,8 +108,6 @@ function VDivider({ pos, onPosChange }: VDividerProps) {
         flexShrink: 0,
         transition: 'background 0.15s',
       }}
-      onMouseEnter={(e) => (e.currentTarget.style.background = '#4a9eff')}
-      onMouseLeave={(e) => (e.currentTarget.style.background = '#2a2a2a')}
     />
   );
 }
@@ -162,6 +161,7 @@ function HDivider({ pos, onPosChange }: HDividerProps) {
     <div
       onMouseDown={handleMouseDown}
       data-split-container="true"
+      className="dwo-divider-h"
       style={{
         width: '6px',
         cursor: 'col-resize',
@@ -169,8 +169,6 @@ function HDivider({ pos, onPosChange }: HDividerProps) {
         flexShrink: 0,
         transition: 'background 0.15s',
       }}
-      onMouseEnter={(e) => (e.currentTarget.style.background = '#4a9eff')}
-      onMouseLeave={(e) => (e.currentTarget.style.background = '#2a2a2a')}
     />
   );
 }
@@ -596,26 +594,21 @@ export function TerminalLayout({
             const isDropTarget = dropTargetId === panel.id;
             const isMaximized = maximizedId === panel.id;
 
-            // When a panel is maximized, keep other panels mounted in DOM but hidden
+            // When a panel is maximized, siblings stay out of the tree entirely.
+            // Previously they were kept mounted under `display:none` — but each
+            // hidden sibling still mounted an xterm instance whose fit loop
+            // (retry-fit + ResizeObserver + fonts.ready + waitForTerminalDims)
+            // could never observe a non-zero rect, storming resizes in prod.
+            // State is preserved by the layout/panel model, not by keeping
+            // invisible terminals alive.
             if (maximizedId && !isMaximized) {
               return (
                 <div
                   key={panel.id}
                   data-panel-id={panel.id}
                   style={{ display: 'none' }}
-                >
-                  <TerminalPanel
-                    id={session.id}
-                    title={session.title}
-                    visible={session.visible}
-                    isActive={session.id === activeId}
-                    isMaximized={false}
-                    isTui={session.is_tui}
-                    onClose={() => handleClose(session.id)}
-                    onFocus={() => focusPanel(session.id)}
-                    onMaximize={() => handleMaximize(session.id)}
-                  />
-                </div>
+                  aria-hidden="true"
+                />
               );
             }
 

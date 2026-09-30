@@ -442,10 +442,11 @@ export function MonacoEditor({ filePath, content, onChange, onSave, onStatus }: 
   useEffect(() => {
     if (!editorReady) return;
     if (monacoRef.current) {
+      // Register (idempotent) then activate via the editor API.
+      // NOTE: `updateOptions({ theme })` is a no-op — IStandaloneEditorConstructionOptions
+      // has no `theme` field — so theme switches must go through setTheme.
       applyMonacoTheme(monacoRef.current, currentThemeKey);
-      editorRef.current?.updateOptions({
-        theme: getMonacoThemeName(currentThemeKey),
-      });
+      monacoRef.current.editor.setTheme(getMonacoThemeName(currentThemeKey));
     }
   }, [editorReady, currentThemeKey]);
 

@@ -12,6 +12,7 @@ import { readFile, writeFile, pickFolder } from '@/lib/api';
 import { LargePlaceholder } from '@/lib/setiIcons';
 import { invoke, isTauri } from '@/lib/tauri';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { convertFileSrc } from '@tauri-apps/api/core';
 
 interface IDEViewProps {
   // Optional initial path to start at (e.g., from a workspace)
@@ -39,6 +40,24 @@ const TREE_REFRESH_MS = 300;
 /** Uniform separators and no trailing slash — used to match event paths to tabs. */
 function normalizePath(path: string): string {
   return path.replace(/\\/g, '/').replace(/\/+$/, '');
+}
+
+/**
+ * Resolve a local file path to a URL the WebView can actually load.
+ * `file://` never resolves inside the Tauri WebView / static export, so
+ * images and PDFs permanently hit the error fallback in the bundled app.
+ * `convertFileSrc()` maps to the `asset:` protocol (allowed by CSP); outside
+ * Tauri (browser / Docker) fall back to `file://` as before.
+ */
+function toViewableUrl(filePath: string): string {
+  if (isTauri()) {
+    try {
+      return convertFileSrc(filePath);
+    } catch {
+      // Plugin unavailable — fall through to file:// below.
+    }
+  }
+  return `file://${filePath}`;
 }
 
 type FileCategory = 'code' | 'image' | 'pdf' | 'other';
@@ -105,7 +124,7 @@ function getFileCategory(path: string): FileCategory {
 
 function ImageViewer({ filePath, theme }: { filePath: string; theme: any }) {
   const [hasError, setHasError] = useState(false);
-  const imageUrl = `file://${filePath}`;
+  const imageUrl = toViewableUrl(filePath);
 
   if (hasError) {
     return (
@@ -154,7 +173,7 @@ function ImageViewer({ filePath, theme }: { filePath: string; theme: any }) {
 
 function PdfViewer({ filePath }: { filePath: string }) {
   const [hasError, setHasError] = useState(false);
-  const pdfUrl = `file://${filePath}`;
+  const pdfUrl = toViewableUrl(filePath);
 
   if (hasError) {
     return (

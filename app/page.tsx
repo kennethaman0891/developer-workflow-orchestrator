@@ -204,6 +204,7 @@ function AppShell() {
       }}>
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
+          className="dwo-icon-btn"
           style={{
             width: '36px',
             height: '36px',
@@ -219,14 +220,6 @@ function AppShell() {
             color: sidebarOpen ? '#888888' : '#4a9eff',
             transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
             opacity: 0.8,
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.background = '#1a1a1a';
-            e.currentTarget.style.opacity = '1';
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.background = '#111111';
-            e.currentTarget.style.opacity = '0.8';
           }}
           title={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
         >

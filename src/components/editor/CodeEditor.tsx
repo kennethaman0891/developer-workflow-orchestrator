@@ -1,17 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { EditorView, keymap, ViewUpdate, lineNumbers, highlightActiveLineGutter, scrollPastEnd } from '@codemirror/view';
-import { EditorState } from '@codemirror/state';
-import { javascript } from '@codemirror/lang-javascript';
-import { python } from '@codemirror/lang-python';
-import { html } from '@codemirror/lang-html';
-import { css } from '@codemirror/lang-css';
-import { json } from '@codemirror/lang-json';
-import { oneDark } from '@codemirror/theme-one-dark';
-import { autocompletion, completionKeymap } from '@codemirror/autocomplete';
-import { lintKeymap } from '@codemirror/lint';
-import { foldGutter, foldKeymap, indentOnInput } from '@codemirror/language';
+import type { EditorView as EditorViewType } from '@codemirror/view';
+import type { Extension } from '@codemirror/state';
 import { useSettings } from '@/contexts/SettingsContext';
 
 interface CodeEditorProps {
@@ -20,8 +11,13 @@ interface CodeEditorProps {
   onSave?: (path: string, content: string) => void;
 }
 
-/** Map file extensions to CodeMirror language extensions */
-function getLanguageExtension(filePath?: string) {
+/**
+ * Load language extensions lazily (client-only).
+ * All @codemirror/* packages touch `document` at import time, so they must
+ * NEVER be statically imported — `output:export` prerender runs on Node
+ * with no DOM and would emit a broken out/index.html.
+ */
+async function getLanguageExtension(filePath?: string): Promise<Extension[]> {
   if (!filePath) return [];
   const ext = filePath.split('.').pop()?.toLowerCase();
   switch (ext) {
@@ -29,23 +25,31 @@ function getLanguageExtension(filePath?: string) {
     case 'jsx':
     case 'ts':
     case 'tsx':
-    case 'mjs':
+    case 'mjs': {
+      const { javascript } = await import('@codemirror/lang-javascript');
       return [javascript({ jsx: true, typescript: true })];
-    case 'py':
+    }
+    case 'py': {
+      const { python } = await import('@codemirror/lang-python');
       return [python()];
+    }
     case 'html':
-      return [html()];
-    case 'css':
-      return [css()];
-    case 'json':
-      return [json()];
     case 'xml':
     case 'plist':
-    case 'svg':
-      return [html()]; // XML uses tag-based syntax similar to HTML
+    case 'svg': {
+      const { html } = await import('@codemirror/lang-html');
+      return [html()];
+    }
+    case 'css': {
+      const { css } = await import('@codemirror/lang-css');
+      return [css()];
+    }
+    case 'json': {
+      const { json } = await import('@codemirror/lang-json');
+      return [json()];
+    }
     case 'md':
     case 'markdown':
-      return [];
     default:
       return [];
   }
@@ -53,7 +57,7 @@ function getLanguageExtension(filePath?: string) {
 
 export function CodeEditor({ filePath, content, onSave }: CodeEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const viewRef = useRef<EditorView | null>(null);
+  const viewRef = useRef<EditorViewType | null>(null);
   const filePathRef = useRef<string | undefined>(filePath);
   const onSaveRef = useRef(onSave);
   const contentRef = useRef(content);
@@ -88,134 +92,156 @@ export function CodeEditor({ filePath, content, onSave }: CodeEditorProps) {
 
   useEffect(() => {
     const container = containerRef.current;
-    console.log('[CodeEditor] Effect triggered', {
-      hasContainer: !!container,
-      filePath,
-      contentLength: content?.length,
-    });
+    let cancelled = false;
 
     if (!container) {
-      console.log('[CodeEditor] Container ref is null - skipping init');
       setInitError('Container ref is null');
       return;
     }
 
     // Destroy previous view if exists
     if (viewRef.current) {
-      console.log('[CodeEditor] Destroying previous view');
       viewRef.current.destroy();
       viewRef.current = null;
     }
+    setIsReady(false);
+    setInitError(null);
 
     // Small delay to ensure DOM has layout
     const timer = setTimeout(() => {
-      try {
-        // Check container dimensions again after timeout
-        const rect = container.getBoundingClientRect();
-        console.log('[CodeEditor] Container dimensions after delay:', rect.width, 'x', rect.height);
+      void (async () => {
+        try {
+          // Check container dimensions again after timeout
+          const rect = container.getBoundingClientRect();
 
-        if (rect.width === 0 || rect.height === 0) {
-          console.warn('[CodeEditor] Container has zero dimensions, will retry');
-          setInitError('Container has zero dimensions');
-          return;
+          if (rect.width === 0 || rect.height === 0) {
+            if (!cancelled) setInitError('Container has zero dimensions');
+            return;
+          }
+
+          // Lazy-load CodeMirror on the client only (see module doc above).
+          const [
+            { EditorView, keymap, lineNumbers, highlightActiveLineGutter, scrollPastEnd },
+            { EditorState },
+            { oneDark },
+            { autocompletion, completionKeymap },
+            { lintKeymap },
+            { foldGutter, foldKeymap, indentOnInput },
+          ] = await Promise.all([
+            import('@codemirror/view'),
+            import('@codemirror/state'),
+            import('@codemirror/theme-one-dark'),
+            import('@codemirror/autocomplete'),
+            import('@codemirror/lint'),
+            import('@codemirror/language'),
+          ]);
+          if (cancelled) return;
+
+          // Build language-specific extensions
+          const langExt = await getLanguageExtension(filePath);
+          if (cancelled) return;
+
+          const extensions = [
+            oneDark,
+            // Core features
+            lineNumbers(),
+            highlightActiveLineGutter(),
+            foldGutter(),
+            scrollPastEnd(),
+            EditorView.lineWrapping,
+            // Keymaps
+            keymap.of([...completionKeymap, ...lintKeymap, ...foldKeymap]),
+            // Features
+            autocompletion(),
+            indentOnInput(),
+            ...langExt,
+          ];
+
+          // Apply font-size via CSS
+          container.style.fontSize = `${fontSizeRef.current}px`;
+
+          // Create initial state with content
+          const initialState = EditorState.create({
+            doc: contentRef.current || '',
+            extensions,
+          });
+
+          // Create new view
+          const view = new EditorView({
+            state: initialState,
+            parent: container,
+          });
+
+          if (cancelled) {
+            view.destroy();
+            return;
+          }
+
+          viewRef.current = view;
+          setIsReady(true);
+        } catch (error) {
+          if (!cancelled) {
+            console.error('[CodeEditor] Failed to initialize:', error);
+            setInitError(String(error));
+          }
         }
-
-        // Build language-specific extensions
-        const langExt = getLanguageExtension(filePath);
-        const extensions = [
-          oneDark,
-          // Core features
-          lineNumbers(),
-          highlightActiveLineGutter(),
-          foldGutter(),
-          scrollPastEnd(),
-          EditorView.lineWrapping,
-          // Keymaps
-          keymap.of([
-            ...completionKeymap,
-            ...lintKeymap,
-            ...foldKeymap,
-          ]),
-          // Features
-          autocompletion(),
-          indentOnInput(),
-          ...langExt,
-        ];
-
-        // Apply font-size via CSS
-        container.style.fontSize = `${fontSizeRef.current}px`;
-
-        // Create initial state with content
-        const initialState = EditorState.create({
-          doc: contentRef.current || '',
-          extensions,
-        });
-
-        // Create new view
-        const view = new EditorView({
-          state: initialState,
-          parent: container,
-          dispatch: (tr) => {
-            view.dispatch(tr);
-          },
-        });
-
-        viewRef.current = view;
-        setIsReady(true);
-        console.log('[CodeEditor] Editor initialized successfully for:', filePath);
-      } catch (error) {
-        console.error('[CodeEditor] Failed to initialize:', error);
-        setInitError(String(error));
-      }
+      })();
     }, 150);
 
     return () => {
+      cancelled = true;
       clearTimeout(timer);
       if (viewRef.current) {
-        console.log('[CodeEditor] Cleaning up editor');
         viewRef.current.destroy();
         viewRef.current = null;
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filePath, content]); // Re-init when file or content changes
 
   // Show loading indicator while waiting for initialization
   if (!isReady && !initError) {
     return (
-      <div style={{
-        height: '100%',
-        background: '#1e1e1e',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: '#888',
-        fontSize: '13px',
-      }}>
+      <div
+        style={{
+          height: '100%',
+          background: '#1e1e1e',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#888',
+          fontSize: '13px',
+        }}
+      >
         Initializing editor...
       </div>
     );
   }
 
   return (
-    <div style={{
-      height: '100%',
-      background: '#1e1e1e',
-      position: 'relative',
-      overflow: 'auto',
-    }}>
+    <div
+      style={{
+        height: '100%',
+        background: '#1e1e1e',
+        position: 'relative',
+        overflow: 'auto',
+      }}
+    >
       {initError && (
-        <div style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          right: 0,
-          padding: '8px 12px',
-          background: '#2d1215',
-          color: '#ff6b6b',
-          fontSize: '12px',
-          borderBottom: '1px solid #ff4444',
-          zIndex: 10,
-        }}>
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            padding: '8px 12px',
+            background: '#2d1215',
+            color: '#ff6b6b',
+            fontSize: '12px',
+            borderBottom: '1px solid #ff4444',
+            zIndex: 10,
+          }}
+        >
           ⚠️ Editor init error: {initError}
         </div>
       )}

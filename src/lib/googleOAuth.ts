@@ -2,8 +2,12 @@
  * Google OAuth utility for DWO
  * Supports multiple OAuth flows:
  * 1. GSI TokenClient (preferred, when script is loaded)
- * 2. Popup OAuth with hash-based callback
- * 3. Local HTTP server callback (for production)
+ * 2. Popup OAuth with hash-based callback (browser / dev mode)
+ * 3. Tauri shell opener (bundled desktop app — system browser)
+ *
+ * NOTE: there is intentionally NO Node `http` callback server here.
+ * `await import('http')` breaks the browser bundle (Webpack cannot resolve
+ * the Node builtin for `output:export` and Tauri has no Node runtime).
  */
 
 import { loadGoogleScript } from './gsi';
@@ -21,78 +25,63 @@ export interface OAuthResult {
 }
 
 // ---------------------------------------------------------------------------
-// Local callback server
+// Runtime detection
 // ---------------------------------------------------------------------------
 
-/**
- * Starts a tiny local HTTP server to receive the OAuth callback.
- * Returns the port it's listening on, or null if it fails.
- */
-async function startCallbackServer(): Promise<number | null> {
+/** True when running inside the Tauri WebView (no popup / localhost listener). */
+function isTauriRuntime(): boolean {
   try {
-    // Use a free port by binding to 0
-    const http = await import('http');
-    const server = http.createServer((req, res) => {
-      if (req.url?.startsWith('/callback')) {
-        res.writeHead(200, { 'Content-Type': 'text/html' });
-        res.end(`
-          <html><body>
-            <script>
-              // Send the OAuth data back to the main window
-              if (window.opener) {
-                window.opener.postMessage({ type: 'google_oauth_result', payload: new URLSearchParams(window.location.hash.slice(1)) }, '*');
-              }
-              window.close();
-            </script>
-            <p>Authentication successful! You can close this window.</p>
-          </body></html>
-        `);
-      } else {
-        res.writeHead(404);
-        res.end('Not found');
-      }
-    });
-
-    await new Promise<void>((resolve, reject) => {
-      server.listen(0, '127.0.0.1', () => resolve());
-      server.on('error', reject);
-    });
-
-    const address = server.address() as any;
-    return address?.port ?? null;
+    return (
+      typeof window !== 'undefined' &&
+      ((window as any).__TAURI__ !== undefined ||
+        (window as any).__TAURI_INTERNALS__ !== undefined)
+    );
   } catch {
-    return null;
+    return false;
   }
 }
 
+/** Generate a random OAuth state parameter for CSRF protection. */
+function generateState(): string {
+  return Array.from(crypto.getRandomValues(new Uint8Array(16)))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+/** Build the Google OAuth URL (shared by popup + Tauri shell flows). */
+function buildAuthUrl(clientId: string, state: string): URL {
+  const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+  authUrl.searchParams.set('client_id', clientId);
+  authUrl.searchParams.set('redirect_uri', 'https://localhost');
+  authUrl.searchParams.set('response_type', 'token');
+  authUrl.searchParams.set('scope', 'email profile openid');
+  authUrl.searchParams.set('prompt', 'select_account consent');
+  authUrl.searchParams.set('state', state);
+  return authUrl;
+}
+
 // ---------------------------------------------------------------------------
-// Google OAuth with popup
+// Google OAuth with popup (browser / dev mode)
 // ---------------------------------------------------------------------------
 
 /**
  * Performs Google OAuth using a popup window.
  * Uses hash-fragment callback to avoid needing a backend server.
+ * Only valid in a real browser — callers must guard Tauri via isTauriRuntime().
  */
 export async function googleOAuthPopup(clientId: string): Promise<OAuthResult> {
+  if (isTauriRuntime()) {
+    return googleOAuthTauri(clientId);
+  }
+
   return new Promise((resolve, reject) => {
     const popupWidth = 500;
     const popupHeight = 680;
     const left = Math.floor((screen.width - popupWidth) / 2);
     const top = Math.floor((screen.height - popupHeight) / 2);
 
-    // Generate a random state parameter for CSRF protection
-    const state = Array.from(crypto.getRandomValues(new Uint8Array(16)))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
-
-    // Build the OAuth URL with prompt=select_account to force account chooser
-    const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-    authUrl.searchParams.set('client_id', clientId);
-    authUrl.searchParams.set('redirect_uri', 'https://localhost');
-    authUrl.searchParams.set('response_type', 'token');
-    authUrl.searchParams.set('scope', 'email profile openid');
-    authUrl.searchParams.set('prompt', 'select_account consent');
-    authUrl.searchParams.set('state', state);
+    const state = generateState();
+    const authUrl = buildAuthUrl(clientId, state);
 
     const popup = window.open(
       authUrl.toString(),
@@ -121,11 +110,11 @@ export async function googleOAuthPopup(clientId: string): Promise<OAuthResult> {
         cleanup();
         const params = event.data.params || event.data.payload;
         if (params instanceof URLSearchParams) {
-          handleOAuthResponse(params);
+          handleOAuthResponse(params).then(resolve, reject);
         } else if (typeof params === 'string') {
-          handleOAuthResponse(new URLSearchParams(params));
+          handleOAuthResponse(new URLSearchParams(params)).then(resolve, reject);
         } else if (params && typeof params === 'object') {
-          handleOAuthResponse(new URLSearchParams(params));
+          handleOAuthResponse(new URLSearchParams(params)).then(resolve, reject);
         } else {
           reject(new Error('Invalid OAuth response payload'));
         }
@@ -146,7 +135,9 @@ export async function googleOAuthPopup(clientId: string): Promise<OAuthResult> {
     const pollInterval = setInterval(() => {
       if (popup.closed) {
         cleanup();
-        // Check if we got the result via postMessage
+        // Result (if any) arrives via postMessage; closing without a
+        // result means the user cancelled.
+        reject(new Error('Sign-in window was closed before completing.'));
         return;
       }
 
@@ -158,7 +149,7 @@ export async function googleOAuthPopup(clientId: string): Promise<OAuthResult> {
           const hash = currentUrl.split('#')[1];
           if (hash) {
             const params = new URLSearchParams(hash);
-            handleOAuthResponse(params);
+            handleOAuthResponse(params).then(resolve, reject);
           } else {
             reject(new Error('No authentication response received'));
           }
@@ -175,6 +166,30 @@ export async function googleOAuthPopup(clientId: string): Promise<OAuthResult> {
       reject(new Error('Authentication timed out. Please try again.'));
     }, 5 * 60 * 1000);
   });
+}
+
+/**
+ * Tauri desktop flow: open the system browser via the shell plugin and
+ * reject with a clear message instead of hanging on a blocked popup.
+ * Full deep-link return is wired up once a custom protocol is registered;
+ * until then the user completes sign-in in the browser and pastes the token.
+ */
+export async function googleOAuthTauri(clientId: string): Promise<OAuthResult> {
+  const state = generateState();
+  const authUrl = buildAuthUrl(clientId, state);
+
+  try {
+    const { open } = await import('@tauri-apps/plugin-shell');
+    await (open as (url: string) => Promise<void>)(authUrl.toString());
+  } catch {
+    // Shell plugin unavailable — fall through to the message below.
+  }
+
+  throw new Error(
+    'Google sign-in opened in your system browser. ' +
+      'Complete sign-in there, then paste the access token when prompted. ' +
+      '(Automatic return to the app requires a registered dwo:// callback URL.)'
+  );
 }
 
 /**
@@ -221,7 +236,12 @@ async function handleOAuthResponse(params: URLSearchParams): Promise<OAuthResult
     throw new Error('Failed to fetch user profile from Google');
   }
 
-  const profile = await res.json() as { email: string; name: string; picture: string; given_name?: string };
+  const profile = (await res.json()) as {
+    email: string;
+    name: string;
+    picture: string;
+    given_name?: string;
+  };
 
   return {
     profile: {
@@ -253,8 +273,8 @@ export async function googleOAuthWithGSI(clientId: string): Promise<OAuthResult>
           fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
             headers: { Authorization: `Bearer ${response.access_token}` },
           })
-            .then(r => r.json())
-            .then(profile => {
+            .then((r) => r.json())
+            .then((profile) => {
               resolve({
                 profile: {
                   email: profile.email,
@@ -281,8 +301,8 @@ export async function googleOAuthWithGSI(clientId: string): Promise<OAuthResult>
 // ---------------------------------------------------------------------------
 
 export async function signInWithGoogle(clientId: string): Promise<OAuthResult> {
-  // Try GSI first if script is loaded
-  if ((window as any).google?.accounts?.oauth2) {
+  // Try GSI first if script is loaded (browser only; skipped in Tauri)
+  if (!isTauriRuntime() && (window as any).google?.accounts?.oauth2) {
     try {
       return await googleOAuthWithGSI(clientId);
     } catch (err) {
@@ -290,7 +310,7 @@ export async function signInWithGoogle(clientId: string): Promise<OAuthResult> {
     }
   }
 
-  // Fallback to popup flow
+  // Popup flow routes to the Tauri shell flow automatically when needed
   return googleOAuthPopup(clientId);
 }
 
@@ -321,3 +341,5 @@ export function clearGoogleClientId(): void {
     localStorage.removeItem('dwo_google_client_id');
   } catch {}
 }
+
+export { loadGoogleScript };
