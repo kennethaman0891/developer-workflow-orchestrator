@@ -184,8 +184,8 @@ function AppShell() {
   return (
     <>
     <div
+      data-dwo-root=""
       style={{
-        // dvh tracks Tauri window chrome/resize; vh fallback for older WebViews.
         height: '100vh',
         minHeight: '100dvh',
         display: 'flex',
@@ -210,23 +210,20 @@ function AppShell() {
       }}>
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="dwo-icon-btn"
-          style={{
-            width: '36px',
+          style={{ width: '36px',
             height: '36px',
-            background: '#111111',
+            background: 'var(--dwo-color-bg, #0a0a0a)',
             border: 'none',
-            borderBottom: '1px solid #2a2a2a',
-            borderRight: '1px solid #2a2a2a',
+            borderBottom: '1px solid var(--dwo-color-border, #1a1a1a)',
+            borderRight: '1px solid var(--dwo-color-border, #1a1a1a)',
             borderRadius: '0 0 8px 0',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: sidebarOpen ? '#888888' : '#4a9eff',
+            color: sidebarOpen ? 'var(--dwo-color-text-muted, #888)' : 'var(--dwo-color-accent, #4a9eff)',
             transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-            opacity: 0.8,
-          }}
+            opacity: 0.8, }}
           title={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
         >
           {sidebarOpen ? (
@@ -261,25 +258,39 @@ function AppShell() {
         </ErrorBoundary>
       )}
 
-      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
-        {/* Left sidebar */}
-        {sidebarOpen && (
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative', minHeight: 0 }}>
+        {/* Sidebar wrapper — always mounted so the flex row never reflows.
+            When closed the wrapper collapses to 0 px via CSS transition; the
+            Sidebar stays in the DOM underneath so the WebView flex layout
+            distributes width to <main> instantly, avoiding the ghost gap that
+            appeared when the sidebar was conditionally unmounted. */}
+        <div
+          style={{
+            width: sidebarOpen ? '240px' : '0',
+            minWidth: sidebarOpen ? '240px' : '0',
+            maxWidth: sidebarOpen ? '240px' : '0',
+            overflow: 'hidden',
+            flexShrink: 0,
+            transition:
+              'width 0.2s cubic-bezier(0.4,0,0.2,1), min-width 0.2s cubic-bezier(0.4,0,0.2,1), max-width 0.2s cubic-bezier(0.4,0,0.2,1)',
+          }}
+        >
           <ErrorBoundary label="Sidebar">
             <Sidebar
-            workspaces={workspaces}
-            activeId={activeId || ''}
-            setMainView={(v: string) => setMainView(v as MainView)}
-            currentView={mainView}
-            onCreateTerminal={createTerminalForWorkspace}
-            onOpenWizard={() => setShowWizard(true)}
-            onCloseWorkspace={handleCloseWorkspace}
-            onActivateWorkspace={activateWs}
-            onOpenHandoff={() => setHandoffOpen(true)}
-            sidebarOpen={sidebarOpen}
-            onSidebarToggle={() => setSidebarOpen((open) => !open)}
+              workspaces={workspaces}
+              activeId={activeId || ''}
+              setMainView={(v: string) => setMainView(v as MainView)}
+              currentView={mainView}
+              onCreateTerminal={createTerminalForWorkspace}
+              onOpenWizard={() => setShowWizard(true)}
+              onCloseWorkspace={handleCloseWorkspace}
+              onActivateWorkspace={activateWs}
+              onOpenHandoff={() => setHandoffOpen(true)}
+              sidebarOpen={sidebarOpen}
+              onSidebarToggle={() => setSidebarOpen((open) => !open)}
             />
           </ErrorBoundary>
-        )}
+        </div>
 
         {/* Main content area */}
         <main style={{
