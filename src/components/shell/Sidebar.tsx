@@ -270,12 +270,18 @@ export function Sidebar({
   const [newWsName, setNewWsName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [localView, setLocalView] = useState(currentView);
-  // `isTauri()` is an environment check: false on the server, true inside
-  // the Tauri webview. Branching on it during render desyncs the SSR tree,
-  // so the flag is derived post-mount instead.
+  // Detect Tauri mode after mount. We deliberately do NOT read isTauri()
+  // during render (unlike the previous `useState(() => isTauri())` approach)
+  // because isTauri() returns false on the server (no `window`) and true in
+  // Tauri — that desync causes a hydration mismatch (server HTML ≠ client
+  // HTML). Starting with `false` keeps the initial tree identical on both
+  // sides. The handoff button area is always rendered (with an invisible
+  // placeholder when not in Tauri mode) so the DOM structure never changes
+  // across the server/client boundary, and the placeholder keeps the layout
+  // stable so the one-time reveal after mount doesn't shift the sidebar.
   const [tauriMode, setTauriMode] = useState(false);
   useEffect(() => {
-    setTauriMode(isTauri());
+    if (isTauri()) setTauriMode(true);
   }, []);
 
   // Sync local nav highlight when the parent changes the real view
@@ -322,8 +328,8 @@ export function Sidebar({
         height: '100%',
         minHeight: 0,
         alignSelf: 'stretch',
-        background: theme.colors.bgSecondary,
-        borderRight: `1px solid ${theme.colors.border}`,
+        background: 'var(--dwo-color-bg-secondary)',
+        borderRight: `1px solid ${'var(--dwo-color-border)'}`,
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
@@ -334,7 +340,7 @@ export function Sidebar({
       <div
         style={{
           padding: '14px 16px',
-          borderBottom: `1px solid ${theme.colors.border}`,
+          borderBottom: `1px solid ${'var(--dwo-color-border)'}`,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'flex-start',
@@ -372,19 +378,19 @@ export function Sidebar({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: theme.colors.textMuted,
+              color: 'var(--dwo-color-text-muted)',
               transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
               opacity: 0.7,
             }}
             onMouseEnter={e => {
-              e.currentTarget.style.background = theme.colors.bgTertiary;
+              e.currentTarget.style.background = 'var(--dwo-color-bg-tertiary)';
               e.currentTarget.style.opacity = '1';
-              e.currentTarget.style.color = theme.colors.text;
+              e.currentTarget.style.color = 'var(--dwo-color-text)';
             }}
             onMouseLeave={e => {
               e.currentTarget.style.background = 'transparent';
               e.currentTarget.style.opacity = '0.7';
-              e.currentTarget.style.color = theme.colors.textMuted;
+              e.currentTarget.style.color = 'var(--dwo-color-text-muted)';
             }}
             title={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
           >
@@ -410,7 +416,7 @@ export function Sidebar({
           style={{
             fontSize: '13px',
             fontWeight: 700,
-            color: theme.colors.text,
+            color: 'var(--dwo-color-text)',
             letterSpacing: '0.02em',
             lineHeight: 1.2,
             display: 'flex',
@@ -419,7 +425,7 @@ export function Sidebar({
           }}
         >
           <span>DWO</span>
-          <span style={{ fontSize: '10px', fontWeight: 400, color: theme.colors.textMuted, letterSpacing: '0.01em' }}>
+          <span style={{ fontSize: '10px', fontWeight: 400, color: 'var(--dwo-color-text-muted)', letterSpacing: '0.01em' }}>
             Developer Workflow
           </span>
         </div>
@@ -429,7 +435,7 @@ export function Sidebar({
       <div
         style={{
           padding: '10px 8px',
-          borderBottom: `1px solid ${theme.colors.border}`,
+          borderBottom: `1px solid ${'var(--dwo-color-border)'}`,
           flexShrink: 0,
         }}
       >
@@ -533,7 +539,7 @@ export function Sidebar({
                 cursor: isCreating ? 'not-allowed' : 'pointer',
                 padding: '4px 5px',
                 borderRadius: '5px',
-                color: theme.colors.textMuted,
+                color: 'var(--dwo-color-text-muted)',
                 opacity: isCreating ? 0.4 : 0.6,
                 transition: 'opacity 0.12s, color 0.12s',
                 display: 'flex',
@@ -542,12 +548,12 @@ export function Sidebar({
               title="Open folder"
               onMouseEnter={(e) => {
                 if (!isCreating) {
-                  e.currentTarget.style.color = theme.colors.text;
+                  e.currentTarget.style.color = 'var(--dwo-color-text)';
                   e.currentTarget.style.opacity = '1';
                 }
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.color = theme.colors.textMuted;
+                e.currentTarget.style.color = 'var(--dwo-color-text-muted)';
                 e.currentTarget.style.opacity = isCreating ? '0.4' : '0.6';
               }}
             >
@@ -564,7 +570,7 @@ export function Sidebar({
                 cursor: isCreating ? 'not-allowed' : 'pointer',
                 padding: '4px 5px',
                 borderRadius: '5px',
-                color: theme.colors.accent,
+                color: 'var(--dwo-color-accent)',
                 opacity: isCreating ? 0.4 : 0.8,
                 transition: 'opacity 0.12s, background 0.12s',
                 display: 'flex',
@@ -575,7 +581,7 @@ export function Sidebar({
               title="New workspace (⌘T)"
               onMouseEnter={(e) => {
                 if (!isCreating) {
-                  e.currentTarget.style.background = `${theme.colors.accent}18`;
+                  e.currentTarget.style.background = `${'var(--dwo-color-accent)'}18`;
                   e.currentTarget.style.opacity = '1';
                 }
               }}
@@ -607,9 +613,9 @@ export function Sidebar({
                 }}
                 style={{
                   flex: 1,
-                  background: theme.colors.bg,
-                  border: `1px solid ${theme.colors.border}`,
-                  color: theme.colors.text,
+                  background: 'var(--dwo-color-bg)',
+                  border: `1px solid ${'var(--dwo-color-border)'}`,
+                  color: 'var(--dwo-color-text)',
                   padding: '5px 8px',
                   borderRadius: '5px',
                   fontSize: '12px',
@@ -622,8 +628,8 @@ export function Sidebar({
                 onClick={handleCreateWorkspace}
                 disabled={!newWsName.trim()}
                 style={{
-                  background: newWsName.trim() ? theme.colors.accent : theme.colors.bgTertiary,
-                  color: newWsName.trim() ? '#fff' : theme.colors.textMuted,
+                  background: newWsName.trim() ? 'var(--dwo-color-accent)' : 'var(--dwo-color-bg-tertiary)',
+                  color: newWsName.trim() ? '#fff' : 'var(--dwo-color-text-muted)',
                   border: 'none',
                   padding: '5px 10px',
                   borderRadius: '5px',
@@ -662,7 +668,7 @@ export function Sidebar({
           <div
             style={{
               padding: '8px 12px 4px',
-              borderTop: `1px solid ${theme.colors.border}`,
+              borderTop: `1px solid ${'var(--dwo-color-border)'}`,
               marginTop: '4px',
               flexShrink: 0,
             }}
@@ -671,7 +677,7 @@ export function Sidebar({
               onClick={onCreateTerminal}
               style={{
                 width: '100%',
-                background: theme.colors.accent,
+                background: 'var(--dwo-color-accent)',
                 color: '#fff',
                 border: 'none',
                 borderRadius: '6px',
@@ -701,9 +707,12 @@ export function Sidebar({
           </div>
         )}
 
-        {/* Session Handoff button — Tauri desktop mode only */}
-        {tauriMode && onOpenHandoff && (
-          <div style={{ padding: '4px 12px 8px', flexShrink: 0 }}>
+        {/* Session Handoff button — always mounted for hydration safety;
+            invisible placeholder keeps layout stable across the tauri-mode
+            detection so the one-time reveal after mount doesn't shift the
+            sidebar contents. */}
+        <div style={{ padding: '4px 12px 8px', flexShrink: 0, minHeight: '36px' }}>
+          {tauriMode && onOpenHandoff ? (
             <button
               onClick={onOpenHandoff}
               title="Open Session Handoff"
@@ -729,15 +738,17 @@ export function Sidebar({
             >
               ⚡ Session Handoff
             </button>
-          </div>
-        )}
+          ) : (
+            <span style={{ visibility: 'hidden' }}>⚡ Session Handoff</span>
+          )}
+        </div>
       </div>
 
       {/* Footer */}
       <div
         style={{
           padding: '10px 14px',
-          borderTop: `1px solid ${theme.colors.border}`,
+          borderTop: `1px solid ${'var(--dwo-color-border)'}`,
           flexShrink: 0,
         }}
       >
@@ -758,7 +769,7 @@ export function Sidebar({
               <div
                 style={{
                   fontSize: '12px',
-                  color: theme.colors.text,
+                  color: 'var(--dwo-color-text)',
                   fontWeight: 500,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
@@ -770,7 +781,7 @@ export function Sidebar({
               <div
                 style={{
                   fontSize: '10px',
-                  color: theme.colors.textMuted,
+                  color: 'var(--dwo-color-text-muted)',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
@@ -786,7 +797,7 @@ export function Sidebar({
                 background: 'none',
                 border: 'none',
                 cursor: 'pointer',
-                color: theme.colors.textMuted,
+                color: 'var(--dwo-color-text-muted)',
                 padding: '4px',
                 display: 'flex',
                 alignItems: 'center',
@@ -796,11 +807,11 @@ export function Sidebar({
                 flexShrink: 0,
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.color = theme.colors.error;
-                e.currentTarget.style.background = `${theme.colors.error}1a`;
+                e.currentTarget.style.color = 'var(--dwo-color-error)';
+                e.currentTarget.style.background = `${'var(--dwo-color-error)'}1a`;
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.color = theme.colors.textMuted;
+                e.currentTarget.style.color = 'var(--dwo-color-text-muted)';
                 e.currentTarget.style.background = 'transparent';
               }}
             >
@@ -815,10 +826,10 @@ export function Sidebar({
           <div
             style={{
               fontSize: '10px',
-              color: theme.colors.textMuted,
+              color: 'var(--dwo-color-text-muted)',
               marginBottom: '6px',
               padding: '4px 6px',
-              background: theme.colors.bgTertiary,
+              background: 'var(--dwo-color-bg-tertiary)',
               borderRadius: '4px',
               textAlign: 'center',
             }}
@@ -829,7 +840,7 @@ export function Sidebar({
         <div
           style={{
             fontSize: '10px',
-            color: theme.colors.textMuted,
+            color: 'var(--dwo-color-text-muted)',
             textAlign: 'center',
             opacity: 0.6,
             lineHeight: 1.5,
