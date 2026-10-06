@@ -3,7 +3,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { invoke, isTauri } from '@/lib/tauri';
 import { FolderIcon, ChevronRight, ChevronDown, FileIcon } from '@/lib/setiIcons';
-import { useTheme } from '@/contexts/ThemeContext';
 
 interface FileNode {
   name: string;
@@ -83,8 +82,7 @@ function FileNodeComponent({
   onFileSelect: (path: string) => void;
   onToggle: (path: string) => void;
 }) {
-  const { theme } = useTheme();
-
+  
   if (node.is_dir) {
     return (
       <div>
@@ -97,11 +95,11 @@ function FileNodeComponent({
             padding: '3px 8px',
             cursor: 'pointer',
             fontSize: '12px',
-            color: theme.colors.text,
+            color: 'var(--dwo-color-text)',
             background: 'transparent',
             transition: 'background 0.1s',
           }}
-          onMouseEnter={e => { e.currentTarget.style.background = theme.colors.bgTertiary; }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'var(--dwo-color-bg-tertiary)'; }}
           onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
         >
           <span style={{ fontSize: '12px', width: '12px', justifyContent: 'center' }}>
@@ -136,11 +134,11 @@ function FileNodeComponent({
         paddingLeft: `${8 + depth * 16}px`,
         cursor: 'pointer',
         fontSize: '12px',
-        color: theme.colors.text,
+        color: 'var(--dwo-color-text)',
         background: 'transparent',
         transition: 'background 0.1s',
       }}
-      onMouseEnter={e => { e.currentTarget.style.background = theme.colors.bgTertiary; }}
+      onMouseEnter={e => { e.currentTarget.style.background = 'var(--dwo-color-bg-tertiary)'; }}
       onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
     >
       <span style={{ width: '12px', display: 'inline-block' }} />
@@ -153,8 +151,7 @@ function FileNodeComponent({
 }
 
 export function FileBrowser({ rootPath, onFileSelect, className, refreshToken }: FileBrowserProps) {
-  const { theme } = useTheme();
-  const [nodes, setNodes] = useState<FileNode[]>([]);
+    const [nodes, setNodes] = useState<FileNode[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [truncated, setTruncated] = useState(false);
@@ -203,18 +200,6 @@ export function FileBrowser({ rootPath, onFileSelect, className, refreshToken }:
     };
   }, [rootPath, refreshToken]);
 
-  const handleToggle = useCallback((path: string) => {
-    setExpandedPaths(prev => {
-      const next = new Set(prev);
-      if (next.has(path)) {
-        next.delete(path);
-      } else {
-        next.add(path);
-      }
-      return next;
-    });
-  }, []);
-
   // Toggle expand state in nodes
   const updateNodeExpansion = useCallback((nodes: FileNode[], path: string, expanded: boolean): FileNode[] => {
     return nodes.map(node => {
@@ -247,7 +232,7 @@ export function FileBrowser({ rootPath, onFileSelect, className, refreshToken }:
     return (
       <div style={{
         padding: '12px',
-        color: theme.colors.textMuted,
+        color: 'var(--dwo-color-text-muted)',
         fontSize: '12px',
         textAlign: 'center',
       }}>
@@ -260,7 +245,7 @@ export function FileBrowser({ rootPath, onFileSelect, className, refreshToken }:
     return (
       <div style={{
         padding: '12px',
-        color: theme.colors.error,
+        color: 'var(--dwo-color-error)',
         fontSize: '12px',
         textAlign: 'center',
       }}>
@@ -279,8 +264,8 @@ export function FileBrowser({ rootPath, onFileSelect, className, refreshToken }:
       <div style={{
         padding: '8px 12px',
         fontSize: '11px',
-        color: theme.colors.textMuted,
-        borderBottom: `1px solid ${theme.colors.border}`,
+        color: 'var(--dwo-color-text-muted)',
+        borderBottom: `1px solid var(--dwo-color-border)`,
         fontFamily: 'monospace',
         overflow: 'hidden',
         textOverflow: 'ellipsis',
@@ -294,8 +279,8 @@ export function FileBrowser({ rootPath, onFileSelect, className, refreshToken }:
         <div style={{
           padding: '4px 12px',
           fontSize: '11px',
-          color: theme.colors.warning,
-          borderBottom: `1px solid ${theme.colors.border}`,
+          color: 'var(--dwo-color-warning)',
+          borderBottom: `1px solid var(--dwo-color-border)`,
         }}>
           Listing truncated — hidden entries were skipped or beyond the depth limit.
         </div>
@@ -316,7 +301,7 @@ export function FileBrowser({ rootPath, onFileSelect, className, refreshToken }:
           <div style={{
             padding: '12px',
             textAlign: 'center',
-            color: theme.colors.textMuted,
+            color: 'var(--dwo-color-text-muted)',
             fontSize: '11px',
           }}>
             Empty directory

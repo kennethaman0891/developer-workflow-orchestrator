@@ -136,20 +136,20 @@ export function GoogleSignInButton({ size = 'large', fullWidth = false }: Google
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: fullWidth ? '100%' : undefined }}>
         <div style={{
           padding: '16px',
-          background: theme.colors.bgSecondary,
-          border: `1px solid ${theme.colors.border}`,
+          background: 'var(--dwo-color-bg-secondary)',
+          border: `1px solid ${'var(--dwo-color-border)'}`,
           borderRadius: '10px',
         }}>
-          <div style={{ fontSize: '13px', fontWeight: 500, color: theme.colors.text, marginBottom: '6px' }}>
+          <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--dwo-color-text)', marginBottom: '6px' }}>
             Configure Google OAuth
           </div>
-          <div style={{ fontSize: '11px', color: theme.colors.textMuted, lineHeight: '1.5', marginBottom: '12px' }}>
+          <div style={{ fontSize: '11px', color: 'var(--dwo-color-text-muted)', lineHeight: '1.5', marginBottom: '12px' }}>
             To enable real Google sign-in, you need a Google Cloud Client ID.{' '}
             <a
               href="https://console.cloud.google.com/apis/credentials"
               target="_blank"
               rel="noopener noreferrer"
-              style={{ color: theme.colors.accent, textDecoration: 'none' }}
+              style={{ color: 'var(--dwo-color-accent)', textDecoration: 'none' }}
               onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
               onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}
             >
@@ -165,10 +165,10 @@ export function GoogleSignInButton({ size = 'large', fullWidth = false }: Google
             style={{
               width: '100%',
               padding: '10px 12px',
-              background: theme.colors.bg,
-              border: `1px solid ${theme.colors.border}`,
+              background: 'var(--dwo-color-bg)',
+              border: `1px solid ${'var(--dwo-color-border)'}`,
               borderRadius: '6px',
-              color: theme.colors.text,
+              color: 'var(--dwo-color-text)',
               fontSize: '12px',
               fontFamily: 'monospace',
               outline: 'none',
@@ -178,7 +178,7 @@ export function GoogleSignInButton({ size = 'large', fullWidth = false }: Google
             autoFocus
           />
           {configError && (
-            <div style={{ fontSize: '11px', color: theme.colors.error, marginBottom: '8px' }}>
+            <div style={{ fontSize: '11px', color: 'var(--dwo-color-error)', marginBottom: '8px' }}>
               {configError}
             </div>
           )}
@@ -188,7 +188,7 @@ export function GoogleSignInButton({ size = 'large', fullWidth = false }: Google
               style={{
                 flex: 1,
                 height: '36px',
-                background: theme.colors.accent,
+                background: 'var(--dwo-color-accent)',
                 color: '#fff',
                 border: 'none',
                 borderRadius: '6px',
@@ -205,9 +205,9 @@ export function GoogleSignInButton({ size = 'large', fullWidth = false }: Google
               style={{
                 height: '36px',
                 padding: '0 12px',
-                background: theme.colors.bgTertiary,
-                color: theme.colors.textMuted,
-                border: `1px solid ${theme.colors.border}`,
+                background: 'var(--dwo-color-bg-tertiary)',
+                color: 'var(--dwo-color-text-muted)',
+                border: `1px solid ${'var(--dwo-color-border)'}`,
                 borderRadius: '6px',
                 fontSize: '12px',
                 cursor: 'pointer',
@@ -234,10 +234,10 @@ export function GoogleSignInButton({ size = 'large', fullWidth = false }: Google
           style={{
             width: '100%',
             padding: '10px 12px',
-            background: theme.colors.bg,
-            border: `1px solid ${theme.colors.border}`,
+            background: 'var(--dwo-color-bg)',
+            border: `1px solid ${'var(--dwo-color-border)'}`,
             borderRadius: '8px',
-            color: theme.colors.text,
+            color: 'var(--dwo-color-text)',
             fontSize: '13px',
             outline: 'none',
             boxSizing: 'border-box',
@@ -252,16 +252,16 @@ export function GoogleSignInButton({ size = 'large', fullWidth = false }: Google
           style={{
             width: '100%',
             padding: '10px 12px',
-            background: theme.colors.bg,
-            border: `1px solid ${theme.colors.border}`,
+            background: 'var(--dwo-color-bg)',
+            border: `1px solid ${'var(--dwo-color-border)'}`,
             borderRadius: '8px',
-            color: theme.colors.text,
+            color: 'var(--dwo-color-text)',
             fontSize: '13px',
             outline: 'none',
             boxSizing: 'border-box',
           }}
         />
-        {error && <span style={{ fontSize: '11px', color: theme.colors.error }}>{error}</span>}
+        {error && <span style={{ fontSize: '11px', color: 'var(--dwo-color-error)' }}>{error}</span>}
         <div style={{ display: 'flex', gap: '8px' }}>
           <button
             onClick={handleManualSubmit}
@@ -270,7 +270,7 @@ export function GoogleSignInButton({ size = 'large', fullWidth = false }: Google
               flex: 1,
               height: SIZES[size].height,
               padding: SIZES[size].padding,
-              background: theme.colors.accent,
+              background: 'var(--dwo-color-accent)',
               color: '#fff',
               border: 'none',
               borderRadius: '8px',
@@ -288,9 +288,9 @@ export function GoogleSignInButton({ size = 'large', fullWidth = false }: Google
             style={{
               height: SIZES[size].height,
               padding: SIZES[size].padding,
-              background: theme.colors.bgSecondary,
-              color: theme.colors.textMuted,
-              border: `1px solid ${theme.colors.border}`,
+              background: 'var(--dwo-color-bg-secondary)',
+              color: 'var(--dwo-color-text-muted)',
+              border: `1px solid ${'var(--dwo-color-border)'}`,
               borderRadius: '8px',
               fontSize: SIZES[size].fontSize,
               cursor: 'pointer',
@@ -340,9 +340,9 @@ export function GoogleSignInButton({ size = 'large', fullWidth = false }: Google
 
       {/* Divider */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <div style={{ flex: 1, height: '1px', background: theme.colors.border }} />
-        <span style={{ fontSize: '11px', color: theme.colors.textMuted }}>or</span>
-        <div style={{ flex: 1, height: '1px', background: theme.colors.border }} />
+        <div style={{ flex: 1, height: '1px', background: 'var(--dwo-color-border)' }} />
+        <span style={{ fontSize: '11px', color: 'var(--dwo-color-text-muted)' }}>or</span>
+        <div style={{ flex: 1, height: '1px', background: 'var(--dwo-color-border)' }} />
       </div>
 
       {/* Manual sign-in toggle */}
@@ -352,9 +352,9 @@ export function GoogleSignInButton({ size = 'large', fullWidth = false }: Google
           height: SIZES[size].height,
           padding: SIZES[size].padding,
           background: 'transparent',
-          border: `1px solid ${theme.colors.border}`,
+          border: `1px solid ${'var(--dwo-color-border)'}`,
           borderRadius: '8px',
-          color: theme.colors.textMuted,
+          color: 'var(--dwo-color-text-muted)',
           fontSize: SIZES[size].fontSize,
           cursor: 'pointer',
           fontFamily: 'inherit',
@@ -366,12 +366,12 @@ export function GoogleSignInButton({ size = 'large', fullWidth = false }: Google
           transition: 'color 0.15s, border-color 0.15s',
         }}
         onMouseEnter={e => {
-          e.currentTarget.style.color = theme.colors.text;
-          e.currentTarget.style.borderColor = theme.colors.textMuted;
+          e.currentTarget.style.color = 'var(--dwo-color-text)';
+          e.currentTarget.style.borderColor = 'var(--dwo-color-text-muted)';
         }}
         onMouseLeave={e => {
-          e.currentTarget.style.color = theme.colors.textMuted;
-          e.currentTarget.style.borderColor = theme.colors.border;
+          e.currentTarget.style.color = 'var(--dwo-color-text-muted)';
+          e.currentTarget.style.borderColor = 'var(--dwo-color-border)';
         }}
       >
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -383,12 +383,12 @@ export function GoogleSignInButton({ size = 'large', fullWidth = false }: Google
       </button>
 
       {error && (
-        <div style={{ fontSize: '11px', color: theme.colors.error, textAlign: 'center' }}>
+        <div style={{ fontSize: '11px', color: 'var(--dwo-color-error)', textAlign: 'center' }}>
           {error}
         </div>
       )}
 
-      <p style={{ fontSize: '10px', color: theme.colors.textMuted, margin: 0, textAlign: 'center' }}>
+      <p style={{ fontSize: '10px', color: 'var(--dwo-color-text-muted)', margin: 0, textAlign: 'center' }}>
         {!clientId
           ? 'Configure Google OAuth in settings for real sign-in, or use email below.'
           : 'Sign in to collaborate in real-time. Your data stays local.'

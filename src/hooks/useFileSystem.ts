@@ -48,7 +48,8 @@ export function useFileSystem() {
   }, []);
 
   const rename = useCallback(async (oldPath: string, newPath: string): Promise<void> => {
-    await invoke('rename', { old_path: oldPath, new_path: newPath });
+    // Tauri camel-cases Rust arg names: `rename(old_path, new_path)` -> { oldPath, newPath }
+    await invoke('rename', { oldPath, newPath });
   }, []);
 
   const deleteEntry = useCallback(async (path: string): Promise<void> => {

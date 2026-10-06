@@ -11,7 +11,6 @@
 
 import { useMemo } from 'react';
 import { TerminalPool } from '@/components/terminal/TerminalPool';
-import { useTheme } from '@/contexts/ThemeContext';
 import { useTerminals } from '@/hooks/useTerminals';
 
 export interface WorkspaceViewProps {
@@ -40,23 +39,22 @@ export function WorkspaceView({
   layoutKey,
   accent,
 }: WorkspaceViewProps) {
-  const { theme } = useTheme();
   const { sessions, close } = useTerminals();
   // Default to the ACTIVE theme accent so the identity dot follows theme
   // switches instead of staying dark-theme blue in seti/midnight/ocean/carbon.
-  const resolvedAccent = accent ?? theme.colors.accent;
+  const resolvedAccent = accent ?? 'var(--dwo-color-accent)';
 
   const headerStyle = useMemo(
     () => ({
       display: 'flex',
       alignItems: 'center',
-      gap: theme.spacing.md,
-      padding: `0 ${theme.spacing.lg}`,
+      gap: 'var(--dwo-space-md)',
+      padding: `0 var(--dwo-space-lg)`,
       height: 44,
-      background: theme.colors.bgSecondary,
-      borderBottom: `1px solid ${theme.colors.border}`,
+      background: 'var(--dwo-color-bg-secondary)',
+      borderBottom: `1px solid var(--dwo-color-border)`,
     }),
-    [theme],
+    [],
   );
 
   return (
@@ -65,8 +63,8 @@ export function WorkspaceView({
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        background: theme.colors.bg,
-        color: theme.colors.text,
+        background: 'var(--dwo-color-bg)',
+        color: 'var(--dwo-color-text)',
       }}
     >
       {/* ── Workspace header ───────────────────────────────────────────── */}
@@ -89,7 +87,7 @@ export function WorkspaceView({
             <span
               style={{
                 fontSize: 11,
-                color: theme.colors.textMuted,
+                color: 'var(--dwo-color-text-muted)',
                 lineHeight: 1.2,
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
@@ -104,11 +102,11 @@ export function WorkspaceView({
           style={{
             marginLeft: 'auto',
             fontSize: 11,
-            color: theme.colors.textMuted,
-            fontFamily: theme.fonts.monospace,
+            color: 'var(--dwo-color-text-muted)',
+            fontFamily: 'var(--dwo-font-mono)',
             display: 'flex',
             alignItems: 'center',
-            gap: theme.spacing.sm,
+            gap: 'var(--dwo-space-sm)',
           }}
         >
           <span>local</span>

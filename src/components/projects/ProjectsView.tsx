@@ -23,8 +23,8 @@ function ProjectCard({ title, description, icon, onClick }: ProjectCardProps) {
     <button
       onClick={onClick}
       style={{
-        background: theme.colors.bgSecondary,
-        border: `1px solid ${theme.colors.border}`,
+        background: 'var(--dwo-color-bg-secondary)',
+        border: `1px solid ${'var(--dwo-color-border)'}`,
         borderRadius: '8px',
         padding: '16px',
         cursor: 'pointer',
@@ -32,12 +32,12 @@ function ProjectCard({ title, description, icon, onClick }: ProjectCardProps) {
         transition: 'border-color 0.2s',
         width: '100%',
       }}
-      onMouseEnter={e => (e.currentTarget.style.borderColor = theme.colors.accent)}
-      onMouseLeave={e => (e.currentTarget.style.borderColor = theme.colors.border)}
+      onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--dwo-color-accent)')}
+      onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--dwo-color-border)')}
     >
       <div style={{ fontSize: '24px', marginBottom: '8px' }}>{icon}</div>
-      <div style={{ fontSize: '13px', fontWeight: 500, color: theme.colors.text }}>{title}</div>
-      <div style={{ fontSize: '11px', color: theme.colors.textMuted, marginTop: '4px' }}>
+      <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--dwo-color-text)' }}>{title}</div>
+      <div style={{ fontSize: '11px', color: 'var(--dwo-color-text-muted)', marginTop: '4px' }}>
         {description}
       </div>
     </button>
@@ -66,8 +66,8 @@ function WorkspaceCard({
     <div
       style={{
         position: 'relative',
-        background: theme.colors.bgSecondary,
-        border: `1px solid ${isActive ? theme.colors.accent : theme.colors.border}`,
+        background: 'var(--dwo-color-bg-secondary)',
+        border: `1px solid ${isActive ? 'var(--dwo-color-accent)' : 'var(--dwo-color-border)'}`,
         borderRadius: '8px',
         padding: '16px',
         transition: 'all 0.2s',
@@ -85,7 +85,7 @@ function WorkspaceCard({
             left: 0,
             right: 0,
             height: '2px',
-            background: theme.colors.accent,
+            background: 'var(--dwo-color-accent)',
             borderRadius: '8px 8px 0 0',
           }}
         />
@@ -113,7 +113,7 @@ function WorkspaceCard({
             style={{
               fontSize: '13px',
               fontWeight: isActive ? 600 : 500,
-              color: theme.colors.text,
+              color: 'var(--dwo-color-text)',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
@@ -126,7 +126,7 @@ function WorkspaceCard({
           <div
             style={{
               fontSize: '11px',
-              color: theme.colors.textMuted,
+              color: 'var(--dwo-color-text-muted)',
               fontFamily: 'monospace',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
@@ -141,7 +141,7 @@ function WorkspaceCard({
           <div
             style={{
               fontSize: '10px',
-              color: theme.colors.textMuted,
+              color: 'var(--dwo-color-text-muted)',
               marginTop: '4px',
               opacity: 0.7,
             }}
@@ -165,7 +165,7 @@ function WorkspaceCard({
             <button
               onClick={onContinue}
               style={{
-                background: theme.colors.accent,
+                background: 'var(--dwo-color-accent)',
                 color: '#fff',
                 border: 'none',
                 borderRadius: '4px',
@@ -193,7 +193,7 @@ function WorkspaceCard({
               }}
               style={{
                 background: 'transparent',
-                color: theme.colors.textMuted,
+                color: 'var(--dwo-color-text-muted)',
                 border: 'none',
                 borderRadius: '4px',
                 padding: '4px',
@@ -208,7 +208,7 @@ function WorkspaceCard({
                 e.currentTarget.style.background = '#ef444418';
               }}
               onMouseLeave={e => {
-                e.currentTarget.style.color = theme.colors.textMuted;
+                e.currentTarget.style.color = 'var(--dwo-color-text-muted)';
                 e.currentTarget.style.background = 'transparent';
               }}
               title="Delete workspace"
@@ -250,17 +250,17 @@ export function ProjectsView({ onContinue, onDeleteWorkspace }: ProjectsViewProp
   return (
     <div style={{ flex: 1, padding: '24px', overflow: 'auto' }}>
       <div style={{ marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '20px', fontWeight: 600, color: theme.colors.text, margin: '0 0 8px 0' }}>
+        <h1 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--dwo-color-text)', margin: '0 0 8px 0' }}>
           Projects
         </h1>
-        <p style={{ fontSize: '13px', color: theme.colors.textMuted, margin: 0 }}>
+        <p style={{ fontSize: '13px', color: 'var(--dwo-color-text-muted)', margin: 0 }}>
           Create or import a project to get started
         </p>
       </div>
 
       {/* Quick Actions */}
       <div style={{ marginBottom: '24px' }}>
-        <div style={{ fontSize: '12px', color: theme.colors.textMuted, marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        <div style={{ fontSize: '12px', color: 'var(--dwo-color-text-muted)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
           Quick Actions
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '12px' }}>
@@ -279,7 +279,7 @@ export function ProjectsView({ onContinue, onDeleteWorkspace }: ProjectsViewProp
       {/* Recent Workspaces */}
       {workspaces.length > 0 && (
         <div>
-          <div style={{ fontSize: '12px', color: theme.colors.textMuted, marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <div style={{ fontSize: '12px', color: 'var(--dwo-color-text-muted)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             Recent Workspaces
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>
@@ -305,14 +305,14 @@ export function ProjectsView({ onContinue, onDeleteWorkspace }: ProjectsViewProp
           // Above the handoff panel (z 60) so New Workspace stays
           // clickable when both are open; below the wizard modal (1000).
           zIndex: 70,
-          background: theme.colors.bgSecondary,
-          border: `1px solid ${theme.colors.border}`,
+          background: 'var(--dwo-color-bg-secondary)',
+          border: `1px solid ${'var(--dwo-color-border)'}`,
           borderRadius: '8px',
           padding: '16px',
           minWidth: '300px',
           boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
         }}>
-          <div style={{ fontSize: '13px', fontWeight: 500, color: theme.colors.text, marginBottom: '8px' }}>
+          <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--dwo-color-text)', marginBottom: '8px' }}>
             New Workspace
           </div>
           <input
@@ -322,9 +322,9 @@ export function ProjectsView({ onContinue, onDeleteWorkspace }: ProjectsViewProp
             placeholder="Workspace name..."
             style={{
               width: '100%',
-              background: theme.colors.bg,
-              border: `1px solid ${theme.colors.border}`,
-              color: theme.colors.text,
+              background: 'var(--dwo-color-bg)',
+              border: `1px solid ${'var(--dwo-color-border)'}`,
+              color: 'var(--dwo-color-text)',
               padding: '6px 10px',
               borderRadius: '4px',
               fontSize: '12px',
@@ -339,7 +339,7 @@ export function ProjectsView({ onContinue, onDeleteWorkspace }: ProjectsViewProp
               onClick={handleCreate}
               style={{
                 flex: 1,
-                background: theme.colors.accent,
+                background: 'var(--dwo-color-accent)',
                 color: '#fff',
                 border: 'none',
                 padding: '6px 12px',
@@ -354,9 +354,9 @@ export function ProjectsView({ onContinue, onDeleteWorkspace }: ProjectsViewProp
               onClick={() => setIsCreating(false)}
               style={{
                 flex: 1,
-                background: theme.colors.bgTertiary,
-                color: theme.colors.text,
-                border: `1px solid ${theme.colors.border}`,
+                background: 'var(--dwo-color-bg-tertiary)',
+                color: 'var(--dwo-color-text)',
+                border: `1px solid ${'var(--dwo-color-border)'}`,
                 padding: '6px 12px',
                 borderRadius: '4px',
                 cursor: 'pointer',

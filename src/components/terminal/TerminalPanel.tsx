@@ -17,7 +17,6 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { TerminalAnchor } from './TerminalAnchor';
 import { useSettings } from '@/contexts/SettingsContext';
-import { useTheme } from '@/contexts/ThemeContext';
 
 export interface PanelProps {
   id: string;
@@ -61,8 +60,7 @@ export function TerminalPanel({
 
   // Pull transparency from global settings so every terminal respects the user's choice
   const { transparency } = useSettings();
-  const { theme } = useTheme();
-
+  
   /** Hex #rrggbb → rgba() with the transparency alpha applied. */
   const withAlpha = (hex: string, alpha: number): string => {
     const m = hex.trim().match(/^#([0-9a-f]{6})$/i);
@@ -85,7 +83,7 @@ export function TerminalPanel({
       setResizeStart({ x: e.clientX, y: e.clientY, spanCol, spanRow });
       setCurrentSpan({ spanCol, spanRow });
     },
-    [gridContainerRef, gridCols, gridRows],
+    [gridContainerRef],
   );
 
   useEffect(() => {
@@ -123,9 +121,9 @@ export function TerminalPanel({
   // Bases come from the active theme (not hardcoded dark values) so the panel
   // blends in midnight/ocean/carbon/seti instead of only dark.
   const bgAlpha = Math.max(0, 1 - transparency / 100);
-  const bgColor = withAlpha(isActive ? theme.colors.bgTertiary : theme.colors.bg, bgAlpha);
-  const borderColor = isActive ? theme.colors.accent : theme.colors.border;
-  const headerBg = withAlpha(theme.colors.bgSecondary, bgAlpha);
+  const bgColor = withAlpha(isActive ? 'var(--dwo-color-bg-tertiary)' : 'var(--dwo-color-bg)', bgAlpha);
+  const borderColor = isActive ? 'var(--dwo-color-accent)' : 'var(--dwo-color-border)';
+  const headerBg = withAlpha('var(--dwo-color-bg-secondary)', bgAlpha);
 
   return (
     <div
@@ -136,12 +134,12 @@ export function TerminalPanel({
         display: 'flex',
         flexDirection: 'column',
         border: `1px solid ${borderColor}`,
-        borderRadius: '8px',
+        borderRadius: 'var(--dwo-radius-md)',
         overflow: 'hidden',
         background: bgColor,
         cursor: 'default',
         transition: 'border-color 0.15s, box-shadow 0.15s, background 0.2s',
-        boxShadow: isActive ? `0 0 0 1px ${theme.colors.accent}44, 0 4px 12px rgba(0,0,0,0.4)` : 'none',
+        boxShadow: isActive ? `0 0 0 1px var(--dwo-color-accent)44, 0 4px 12px rgba(0,0,0,0.4)` : 'none',
         position: 'relative',
         minWidth: 0,
         minHeight: 0,
@@ -172,14 +170,14 @@ export function TerminalPanel({
               width: '6px',
               height: '6px',
               borderRadius: '50%',
-              background: visible ? theme.colors.success : theme.colors.textMuted,
+              background: visible ? 'var(--dwo-color-success)' : 'var(--dwo-color-text-muted)',
               flexShrink: 0,
             }}
           />
           <span
             style={{
               fontSize: '12px',
-              color: theme.colors.text,
+              color: 'var(--dwo-color-text)',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
@@ -192,14 +190,14 @@ export function TerminalPanel({
           <button
             onClick={(e) => { e.stopPropagation(); onMaximize(); }}
             title={isMaximized ? "Restore" : "Maximize"}
-            style={btnStyle(theme.colors.accent)}
+            style={btnStyle('var(--dwo-color-accent)', 'var(--dwo-radius-sm)')}
           >
             {isMaximized ? '❐' : '⛶'}
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); onClose(); }}
             title="Close terminal"
-            style={btnStyle(theme.colors.error)}
+            style={btnStyle('var(--dwo-color-error)', 'var(--dwo-radius-sm)')}
           >
             ✕
           </button>
@@ -208,8 +206,6 @@ export function TerminalPanel({
 
       {/* Terminal content */}
       <div
-        onMouseDown={onFocus}
-        onClick={onFocus}
         style={{ flex: 1, overflow: 'hidden', position: 'relative', minHeight: 0 }}
       >
         <TerminalAnchor sessionId={id} isTui={isTui} />
@@ -226,7 +222,7 @@ export function TerminalPanel({
             width: '12px',
             height: '12px',
             cursor: 'nwse-resize',
-            background: `linear-gradient(135deg, transparent 50%, ${theme.colors.accent}55 50%)`,
+            background: `linear-gradient(135deg, transparent 50%, var(--dwo-color-accent)55 50%)`,
             borderRadius: '0 0 7px 0',
             zIndex: 2,
           }}
@@ -236,7 +232,7 @@ export function TerminalPanel({
   );
 }
 
-function btnStyle(color: string): React.CSSProperties {
+function btnStyle(color: string, borderRadius: string): React.CSSProperties {
   return {
     background: 'transparent',
     border: 'none',
@@ -244,7 +240,7 @@ function btnStyle(color: string): React.CSSProperties {
     cursor: 'pointer',
     fontSize: '13px',
     padding: '2px 5px',
-    borderRadius: '3px',
+    borderRadius,
     lineHeight: 1,
     opacity: 0.7,
   };

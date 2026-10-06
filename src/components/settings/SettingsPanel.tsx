@@ -8,65 +8,50 @@ import { getShellName } from '@/lib/shell';
 
 // ── Icon components ──────────────────────────────────────────────────────────
 
-function IconTheme() {
-  const { theme } = useTheme();
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
-      <circle cx="8" cy="8" r="3" stroke={theme.colors.accent} strokeWidth="1.5" />
-      <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.5 3.5l1.4 1.4M11.1 11.1l1.4 1.4M3.5 12.5l1.4-1.4M11.1 4.9l1.4-1.4" stroke={theme.colors.textMuted} strokeWidth="1.2" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 function IconFont() {
-  const { theme } = useTheme();
-  return (
+    return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
-      <text x="2" y="12" fontSize="10" fontWeight="700" fill={theme.colors.accent} fontFamily="system-ui">A</text>
-      <line x1="1" y1="14" x2="15" y2="14" stroke={theme.colors.textMuted} strokeWidth="1.2" strokeLinecap="round" />
+      <text x="2" y="12" fontSize="10" fontWeight="700" fill="var(--dwo-color-accent)" fontFamily="system-ui">A</text>
+      <line x1="1" y1="14" x2="15" y2="14" stroke="var(--dwo-color-text-muted)" strokeWidth="1.2" strokeLinecap="round" />
     </svg>
   );
 }
 
 function IconWrap() {
-  const { theme } = useTheme();
-  return (
+    return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
-      <path d="M2 4h9M2 8h6M2 12h4" stroke={theme.colors.textMuted} strokeWidth="1.3" strokeLinecap="round" />
-      <path d="M11 5l2 3-2 3" stroke={theme.colors.accent} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M2 4h9M2 8h6M2 12h4" stroke="var(--dwo-color-text-muted)" strokeWidth="1.3" strokeLinecap="round" />
+      <path d="M11 5l2 3-2 3" stroke="var(--dwo-color-accent)" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
 
 function IconMap() {
-  const { theme } = useTheme();
-  return (
+    return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
-      <rect x="2" y="2" width="12" height="12" rx="2" stroke={theme.colors.textMuted} strokeWidth="1.2" />
-      <line x1="5" y1="5" x2="11" y2="5" stroke={theme.colors.accent} strokeWidth="1.2" strokeLinecap="round" opacity="0.6" />
-      <line x1="5" y1="8" x2="9" y2="8" stroke={theme.colors.accent} strokeWidth="1.2" strokeLinecap="round" opacity="0.4" />
-      <line x1="5" y1="11" x2="10" y2="11" stroke={theme.colors.accent} strokeWidth="1.2" strokeLinecap="round" opacity="0.3" />
+      <rect x="2" y="2" width="12" height="12" rx="2" stroke="var(--dwo-color-text-muted)" strokeWidth="1.2" />
+      <line x1="5" y1="5" x2="11" y2="5" stroke="var(--dwo-color-accent)" strokeWidth="1.2" strokeLinecap="round" opacity="0.6" />
+      <line x1="5" y1="8" x2="9" y2="8" stroke="var(--dwo-color-accent)" strokeWidth="1.2" strokeLinecap="round" opacity="0.4" />
+      <line x1="5" y1="11" x2="10" y2="11" stroke="var(--dwo-color-accent)" strokeWidth="1.2" strokeLinecap="round" opacity="0.3" />
     </svg>
   );
 }
 
 function IconTerminal() {
-  const { theme } = useTheme();
-  return (
+    return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
-      <rect x="1" y="3" width="14" height="10" rx="2" stroke={theme.colors.textMuted} strokeWidth="1.2" />
-      <path d="M4 7l2 2-2 2" stroke={theme.colors.accent} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-      <line x1="8" y1="11" x2="11" y2="11" stroke={theme.colors.accent} strokeWidth="1.3" strokeLinecap="round" />
+      <rect x="1" y="3" width="14" height="10" rx="2" stroke="var(--dwo-color-text-muted)" strokeWidth="1.2" />
+      <path d="M4 7l2 2-2 2" stroke="var(--dwo-color-accent)" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+      <line x1="8" y1="11" x2="11" y2="11" stroke="var(--dwo-color-accent)" strokeWidth="1.3" strokeLinecap="round" />
     </svg>
   );
 }
 
 function IconTransparency() {
-  const { theme } = useTheme();
-  return (
+    return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
-      <rect x="2" y="2" width="12" height="12" rx="2" stroke={theme.colors.textMuted} strokeWidth="1.2" strokeDasharray="3 2" />
-      <circle cx="8" cy="8" r="2" fill={theme.colors.accent} opacity="0.5" />
+      <rect x="2" y="2" width="12" height="12" rx="2" stroke="var(--dwo-color-text-muted)" strokeWidth="1.2" strokeDasharray="3 2" />
+      <circle cx="8" cy="8" r="2" fill="var(--dwo-color-accent)" opacity="0.5" />
     </svg>
   );
 }
@@ -82,22 +67,21 @@ const THEMES = [
 ];
 
 function ThemeCard({
-  id, label, description, bg, accent, text, active, onClick,
+  id: _id, label, description, bg, accent, text, active, onClick,
 }: {
   id: string; label: string; description: string;
   bg: string; accent: string; text: string;
   active: boolean; onClick: () => void;
 }) {
-  const { theme } = useTheme();
-  return (
+    return (
     <button
       onClick={onClick}
       aria-pressed={active}
       style={{
         position: 'relative',
         background: 'transparent',
-        border: `2px solid ${active ? accent : theme.colors.border}`,
-        borderRadius: '10px',
+        border: `2px solid ${active ? accent : 'var(--dwo-color-border)'}`,
+        borderRadius: 'var(--dwo-radius-md)',
         cursor: 'pointer',
         textAlign: 'left',
         transition: 'border-color 0.2s, box-shadow 0.2s',
@@ -105,8 +89,8 @@ function ThemeCard({
         overflow: 'hidden',
         padding: 0,
       }}
-      onMouseEnter={e => { if (!active) e.currentTarget.style.borderColor = theme.colors.textMuted; }}
-      onMouseLeave={e => { if (!active) e.currentTarget.style.borderColor = theme.colors.border; }}
+      onMouseEnter={e => { if (!active) e.currentTarget.style.borderColor = 'var(--dwo-color-text-muted)'; }}
+      onMouseLeave={e => { if (!active) e.currentTarget.style.borderColor = 'var(--dwo-color-border)'; }}
     >
       {/* Accent strip */}
       <div style={{ height: '4px', background: accent }} />
@@ -138,19 +122,18 @@ function Slider({
   value: number; min: number; max: number;
   onChange: (v: number) => void; displayValue: string;
 }) {
-  const { theme } = useTheme();
-  const pct = ((value - min) / (max - min)) * 100;
+    const pct = ((value - min) / (max - min)) * 100;
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
       <div style={{
-        flex: 1, height: '6px', background: theme.colors.bgTertiary,
-        borderRadius: '3px', position: 'relative', cursor: 'pointer', overflow: 'hidden',
+        flex: 1, height: '6px', background: 'var(--dwo-color-bg-tertiary)',
+        borderRadius: 'var(--dwo-radius-sm)', position: 'relative', cursor: 'pointer', overflow: 'hidden',
       }}>
         <div style={{
           position: 'absolute', left: 0, top: 0, bottom: 0, width: `${pct}%`,
-          background: `linear-gradient(90deg, ${theme.colors.accent}88, ${theme.colors.accent})`,
-          borderRadius: '3px', transition: 'width 0.15s ease',
+          background: `linear-gradient(90deg, var(--dwo-color-accent)88, var(--dwo-color-accent))`,
+          borderRadius: 'var(--dwo-radius-sm)', transition: 'width 0.15s ease',
         }} />
         <input
           type="range" min={min} max={max} value={value}
@@ -162,7 +145,7 @@ function Slider({
         />
       </div>
       <span style={{
-        fontSize: '12px', color: theme.colors.textMuted, minWidth: '42px',
+        fontSize: '12px', color: 'var(--dwo-color-text-muted)', minWidth: '42px',
         textAlign: 'right', fontVariantNumeric: 'tabular-nums', flexShrink: 0,
       }}>{displayValue}</span>
     </div>
@@ -172,18 +155,17 @@ function Slider({
 // ── Toggle switch ────────────────────────────────────────────────────────────
 
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
-  const { theme } = useTheme();
-  return (
+    return (
     <button
       role="switch" aria-checked={checked}
       onClick={() => onChange(!checked)}
       style={{
         width: '40px', height: '22px', flexShrink: 0,
-        background: checked ? theme.colors.accent : theme.colors.bgTertiary,
-        border: `1px solid ${checked ? theme.colors.accent : theme.colors.border}`,
-        borderRadius: '11px', cursor: 'pointer', position: 'relative',
+        background: checked ? 'var(--dwo-color-accent)' : 'var(--dwo-color-bg-tertiary)',
+        border: `1px solid ${checked ? 'var(--dwo-color-accent)' : 'var(--dwo-color-border)'}`,
+        borderRadius: 'var(--dwo-radius-md)', cursor: 'pointer', position: 'relative',
         transition: 'background 0.2s, border-color 0.2s, box-shadow 0.2s',
-        boxShadow: checked ? `0 0 0 2px ${theme.colors.accent}33` : 'none',
+        boxShadow: checked ? `0 0 0 2px var(--dwo-color-accent)33` : 'none',
         padding: 0,
       }}
     >
@@ -206,33 +188,32 @@ function SettingRow({
 }: {
   icon: React.ReactNode; label: string; description?: string; value?: string; children?: React.ReactNode;
 }) {
-  const { theme } = useTheme();
-  return (
+    return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: '14px',
-      padding: '14px 20px', borderBottom: `1px solid ${theme.colors.border}`,
+      padding: '14px 20px', borderBottom: `1px solid var(--dwo-color-border)`,
     }}>
       <div style={{
-        width: '34px', height: '34px', borderRadius: '8px',
-        background: theme.colors.bgTertiary,
+        width: '34px', height: '34px', borderRadius: 'var(--dwo-radius-md)',
+        background: 'var(--dwo-color-bg-tertiary)',
         display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
       }}>
         {icon}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '13px', fontWeight: 500, color: theme.colors.text }}>{label}</span>
+          <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--dwo-color-text)' }}>{label}</span>
           {value != null && (
             <span style={{
-              fontSize: '11px', color: theme.colors.textMuted,
-              background: theme.colors.bg, border: `1px solid ${theme.colors.border}`,
-              padding: '1px 7px', borderRadius: '4px',
+              fontSize: '11px', color: 'var(--dwo-color-text-muted)',
+              background: 'var(--dwo-color-bg)', border: `1px solid var(--dwo-color-border)`,
+              padding: '1px 7px', borderRadius: 'var(--dwo-radius-sm)',
               fontVariantNumeric: 'tabular-nums',
             }}>{value}</span>
           )}
         </div>
         {description && (
-          <div style={{ fontSize: '11px', color: theme.colors.textMuted, marginTop: '3px' }}>
+          <div style={{ fontSize: '11px', color: 'var(--dwo-color-text-muted)', marginTop: '3px' }}>
             {description}
           </div>
         )}
@@ -245,7 +226,7 @@ function SettingRow({
 // ── Main component ──────────────────────────────────────────────────────────
 
 export function SettingsPanel() {
-  const { theme, setTheme, currentThemeKey } = useTheme();
+  const { setTheme, currentThemeKey } = useTheme();
   const { defaultShell, setShell } = useTerminals();
   const {
     fontSize, wordWrap, minimap, transparency,
@@ -271,11 +252,11 @@ export function SettingsPanel() {
   };
 
   const selectStyle: React.CSSProperties = {
-    background: theme.colors.bgTertiary,
-    border: `1px solid ${theme.colors.border}`,
-    color: theme.colors.text,
+    background: 'var(--dwo-color-bg-tertiary)',
+    border: `1px solid var(--dwo-color-border)`,
+    color: 'var(--dwo-color-text)',
     padding: '6px 10px',
-    borderRadius: '6px',
+    borderRadius: 'var(--dwo-radius-sm)',
     fontSize: '12px',
     cursor: 'pointer',
     outline: 'none',
@@ -283,20 +264,25 @@ export function SettingsPanel() {
 
   return (
     <div style={{
+      flex: 1,
+      width: '100%',
       height: '100%',
+      minHeight: 0,
+      minWidth: 0,
       overflowY: 'auto',
       overflowX: 'hidden',
       padding: '32px 32px 48px',
+      boxSizing: 'border-box',
     }}>
       {/* Header */}
       <div style={{ marginBottom: '36px' }}>
         <h1 style={{
-          fontSize: '22px', fontWeight: 700, color: theme.colors.text,
+          fontSize: '22px', fontWeight: 700, color: 'var(--dwo-color-text)',
           margin: '0 0 6px', letterSpacing: '-0.02em',
         }}>
           Settings
         </h1>
-        <p style={{ fontSize: '13px', color: theme.colors.textMuted, margin: 0 }}>
+        <p style={{ fontSize: '13px', color: 'var(--dwo-color-text-muted)', margin: 0 }}>
           Customize your DWO experience
         </p>
       </div>
@@ -304,7 +290,7 @@ export function SettingsPanel() {
       {/* ── Appearance ── */}
       <section style={{ marginBottom: '36px' }}>
         <h2 style={{
-          fontSize: '11px', fontWeight: 600, color: theme.colors.textMuted,
+          fontSize: '11px', fontWeight: 600, color: 'var(--dwo-color-text-muted)',
           textTransform: 'uppercase', letterSpacing: '0.08em',
           margin: '0 0 14px',
         }}>
@@ -324,16 +310,16 @@ export function SettingsPanel() {
       {/* ── Editor ── */}
       <section style={{ marginBottom: '36px' }}>
         <h2 style={{
-          fontSize: '11px', fontWeight: 600, color: theme.colors.textMuted,
+          fontSize: '11px', fontWeight: 600, color: 'var(--dwo-color-text-muted)',
           textTransform: 'uppercase', letterSpacing: '0.08em',
           margin: '0 0 14px',
         }}>
           Editor
         </h2>
         <div style={{
-          background: theme.colors.bgSecondary,
-          border: `1px solid ${theme.colors.border}`,
-          borderRadius: '12px',
+          background: 'var(--dwo-color-bg-secondary)',
+          border: `1px solid var(--dwo-color-border)`,
+          borderRadius: 'var(--dwo-radius-lg)',
           overflow: 'hidden',
         }}>
           <SettingRow
@@ -368,16 +354,16 @@ export function SettingsPanel() {
       {/* ── Terminal ── */}
       <section style={{ marginBottom: '36px' }}>
         <h2 style={{
-          fontSize: '11px', fontWeight: 600, color: theme.colors.textMuted,
+          fontSize: '11px', fontWeight: 600, color: 'var(--dwo-color-text-muted)',
           textTransform: 'uppercase', letterSpacing: '0.08em',
           margin: '0 0 14px',
         }}>
           Terminal
         </h2>
         <div style={{
-          background: theme.colors.bgSecondary,
-          border: `1px solid ${theme.colors.border}`,
-          borderRadius: '12px',
+          background: 'var(--dwo-color-bg-secondary)',
+          border: `1px solid var(--dwo-color-border)`,
+          borderRadius: 'var(--dwo-radius-lg)',
           overflow: 'hidden',
         }}>
           <SettingRow

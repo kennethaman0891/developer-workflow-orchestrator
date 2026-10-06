@@ -25,13 +25,24 @@ export interface TaskResult {
   exit_code: number;
 }
 
+/**
+ * The Rust `TaskStatus` enum has no `#[serde(rename_all)]`, so Tauri sends its
+ * variant names verbatim: "Active" | "Paused" | "Completed" | "Failed".
+ * The UI (and the `task_update_status` command) works in lowercase, so every
+ * task crossing the wire is normalized once, here at the hook boundary.
+ */
+const toTask = (t: Omit<Task, 'status'> & { status: string }): Task => ({
+  ...t,
+  status: t.status.toLowerCase() as Task['status'],
+});
+
 export function useTasks() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [results, setResults] = useState<TaskResult[]>([]);
 
   const listTasks = useCallback(async () => {
     try {
-      const result = await invoke<Task[]>('task_list', undefined, []);
+      const result = (await invoke<Task[]>('task_list', undefined, [])).map(toTask);
       setTasks(result);
       return result;
     } catch (error) {
@@ -42,7 +53,8 @@ export function useTasks() {
 
   const getTask = useCallback(async (id: string): Promise<Task | null> => {
     try {
-      return await invoke<Task>('task_get', { id });
+      const task = await invoke<Task>('task_get', { id });
+      return task ? toTask(task) : task;
     } catch (error) {
       console.error('Failed to get task:', error);
       return null;
@@ -51,12 +63,13 @@ export function useTasks() {
 
   const createTask = useCallback(async (task: Omit<Task, 'id' | 'created_at'>): Promise<string> => {
     try {
+      // Tauri camel-cases Rust arg names: `task_create(..., working_dir, ...)` -> { workingDir }
       const id = await invoke<string>('task_create', {
         name: task.name,
         description: task.description,
         schedule: task.schedule,
         command: task.command,
-        working_dir: task.working_dir,
+        workingDir: task.working_dir,
       });
       await listTasks();
       return id;
@@ -90,13 +103,15 @@ export function useTasks() {
 
   const saveResult = useCallback(async (result: Omit<TaskResult, 'id'>) => {
     try {
+      // Tauri camel-cases Rust arg names: `task_save_result(task_id, started_at, completed_at, success, output, exit_code)`
+      // -> { taskId, startedAt, completedAt, success, output, exitCode }
       await invoke('task_save_result', {
-        task_id: result.task_id,
-        started_at: result.started_at,
-        completed_at: result.completed_at,
+        taskId: result.task_id,
+        startedAt: result.started_at,
+        completedAt: result.completed_at,
         success: result.success,
         output: result.output,
-        exit_code: result.exit_code,
+        exitCode: result.exit_code,
       });
     } catch (error) {
       console.error('Failed to save task result:', error);

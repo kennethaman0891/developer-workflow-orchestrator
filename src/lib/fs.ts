@@ -32,8 +32,14 @@ export async function fsCreateDir(path: string): Promise<void> {
   await invoke('create_dir', { path });
 }
 
+/**
+ * Rename/move a file or directory.
+ *
+ * Tauri camel-cases Rust arg names: the Rust command takes `old_path` / `new_path`,
+ * so the invoke keys are `oldPath` / `newPath` (not the snake_case field names).
+ */
 export async function fsRename(oldPath: string, newPath: string): Promise<void> {
-  await invoke('rename', { old_path: oldPath, new_path: newPath });
+  await invoke('rename', { oldPath, newPath });
 }
 
 export async function fsDelete(path: string): Promise<void> {

@@ -90,7 +90,7 @@ export function useWorkspaces() {
   const getLaunchCwd = useCallback(async (): Promise<string | null> => {
     try {
       return await invoke<string | null>('get_launch_cwd');
-    } catch (error) {
+    } catch {
       return null;
     }
   }, []);

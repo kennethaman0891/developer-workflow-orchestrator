@@ -6,9 +6,12 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "dev:tauri": "node scripts/dev-server.mjs",
+    "build": "next build && touch src-tauri/build.rs",
     "tauri": "tauri",
-    "tauri:build": "tauri build",
+    "tauri:build": "cargo clean -p dwo --manifest-path src-tauri/Cargo.toml && tauri build",
+    "build:app": "npm run tauri:build && npm run install:app",
+    "install:app": "bash scripts/install-app.sh",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",
@@ -51,6 +54,7 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "globals": "^16.0.0",
     "next": "^15.2.3",
+    "playwright-core": "^1.63.0",
     "prettier": "^3.5.0",
     "typescript": "^5.8.0",
     "typescript-eslint": "^8.26.0"

@@ -96,17 +96,6 @@ function saveLayout(key: string, state: LayoutState) {
   }
 }
 
-/** Initialise a fresh layout: single full-width terminal. */
-function initLayout(activeId: string): LayoutState {
-  return {
-    mode: 'grid',
-    panels: [
-      { id: activeId, col: 0, row: 0, spanCol: 1, spanRow: 1 },
-    ],
-    activeId,
-  };
-}
-
 export function useTerminalLayout(
   sessions: SessionMeta[],
   setActiveId: (id: string) => void,
@@ -268,25 +257,56 @@ export function useTerminalLayout(
   const setMode = useCallback((mode: LayoutMode) => {
     setLayout((prev) => {
       if (prev.mode === mode) return prev;
-      // Re-initialise panels for the new mode
-      if (mode === 'split-h' && prev.panels.length >= 2) {
+      // Split modes require at least 2 panels. If < 2 panels, fall back to grid.
+      if ((mode === 'split-h' || mode === 'split-v') && prev.panels.length < 2) {
         return {
           ...prev,
-          mode,
-          panels: [
-            { id: prev.panels[0].id, col: 0, row: 0, spanCol: 1, spanRow: 1 },
-            { id: prev.panels[1].id, col: 1, row: 0, spanCol: 1, spanRow: 1 },
-          ],
+          mode: 'grid',
+          panels: prev.panels.map((p, i) => ({
+            ...p,
+            col: i % 2,
+            row: Math.floor(i / 2),
+            spanCol: 1,
+            spanRow: 1,
+          })),
         };
       }
-      if (mode === 'split-v' && prev.panels.length >= 2) {
+      // Re-initialise panels for split-h mode (2+ panels)
+      if (mode === 'split-h' && prev.panels.length >= 2) {
+        // For exactly 2 panels, set up divider positions
+        if (prev.panels.length === 2) {
+          return {
+            ...prev,
+            mode,
+            panels: [
+              { id: prev.panels[0].id, col: 0, row: 0, spanCol: 1, spanRow: 1 },
+              { id: prev.panels[1].id, col: 1, row: 0, spanCol: 1, spanRow: 1 },
+            ],
+          };
+        }
+        // For 3+ panels, keep existing grid positions - TerminalLayout handles scroll rendering
         return {
           ...prev,
           mode,
-          panels: [
-            { id: prev.panels[0].id, col: 0, row: 0, spanCol: 1, spanRow: 1 },
-            { id: prev.panels[1].id, col: 0, row: 1, spanCol: 1, spanRow: 1 },
-          ],
+        };
+      }
+      // Re-initialise panels for split-v mode (2+ panels)
+      if (mode === 'split-v' && prev.panels.length >= 2) {
+        // For exactly 2 panels, set up divider positions
+        if (prev.panels.length === 2) {
+          return {
+            ...prev,
+            mode,
+            panels: [
+              { id: prev.panels[0].id, col: 0, row: 0, spanCol: 1, spanRow: 1 },
+              { id: prev.panels[1].id, col: 0, row: 1, spanCol: 1, spanRow: 1 },
+            ],
+          };
+        }
+        // For 3+ panels, keep existing grid positions - TerminalLayout handles scroll rendering
+        return {
+          ...prev,
+          mode,
         };
       }
       // For grid mode or insufficient panels, compact into top-left

@@ -5,7 +5,7 @@
   "build": {
     "frontendDist": "../out",
     "devUrl": "http://localhost:3000",
-    "beforeDevCommand": "npm run dev",
+    "beforeDevCommand": "npm run dev:tauri",
     "beforeBuildCommand": "npm run build"
   },
   "app": {
@@ -17,16 +17,25 @@
         "minWidth": 900,
         "minHeight": 600,
         "resizable": true,
-        "fullscreen": false
+        "fullscreen": false,
+        "devtools": true
       }
     ],
     "security": {
-      "csp": "default-src 'self' tauri: asset:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https: blob:; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https: blob:; img-src 'self' data: https: blob: asset:; worker-src 'self' blob:; connect-src 'self' ipc: tauri: asset: https: wss: http://localhost:* http://127.0.0.1:* ws://localhost:*; frame-src 'self' https:; navigate-to 'self' https: http://localhost:* http://127.0.0.1:*"
+      "csp": "default-src 'self' tauri: asset:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://accounts.google.com https://www.gstatic.com blob:; style-src 'self' 'unsafe-inline' https://www.gstatic.com; font-src 'self' data: blob: https://fonts.gstatic.com https://www.gstatic.com; img-src 'self' data: blob: asset: https://*.googleusercontent.com https://www.gstatic.com; worker-src 'self' blob:; connect-src 'self' ipc: tauri: asset: https://accounts.google.com https://www.gstatic.com https://www.googleapis.com http://localhost:* http://127.0.0.1:* ws://localhost:*; frame-src 'self' https://accounts.google.com; navigate-to 'self' https://accounts.google.com http://localhost:* http://127.0.0.1:*",
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "$HOME/**"
+        ]
+      }
     }
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": [
+      "app"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

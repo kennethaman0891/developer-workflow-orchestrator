@@ -1,12 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { useTheme } from '@/contexts/ThemeContext';
-import { useAgents } from '@/hooks/useAgents';
-
+import { useAgents, type AgentTask } from '@/hooks/useAgents';
 export function AgentOrchestrator() {
-  const { theme } = useTheme();
-  const { tasks, configs, createTask, updateTaskStatus } = useAgents();
+    const { tasks, configs, createTask, updateTaskStatus } = useAgents();
   const [isCreating, setIsCreating] = useState(false);
   const [newTaskName, setNewTaskName] = useState('');
   const [newTaskType, setNewTaskType] = useState('analyzer');
@@ -31,22 +28,22 @@ export function AgentOrchestrator() {
       {/* Header */}
       <div style={{
         padding: '12px 16px',
-        borderBottom: `1px solid ${theme.colors.border}`,
+        borderBottom: `1px solid var(--dwo-color-border)`,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
       }}>
         <div>
-          <div style={{ fontSize: '14px', fontWeight: 600, color: theme.colors.text }}>
+          <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--dwo-color-text)' }}>
             Multi-Agent Orchestration
           </div>
-          <div style={{ fontSize: '11px', color: theme.colors.textMuted, marginTop: '2px' }}>
+          <div style={{ fontSize: '11px', color: 'var(--dwo-color-text-muted)', marginTop: '2px' }}>
             Upload ZIP to distribute tasks across agents
           </div>
         </div>
         <button
           onClick={() => setIsCreating(true)}
-          style={styles.button(theme)}
+          style={styles.button()}
         >
           + New Task
         </button>
@@ -56,8 +53,8 @@ export function AgentOrchestrator() {
       {isCreating && (
         <div style={{
           padding: '12px 16px',
-          borderBottom: `1px solid ${theme.colors.border}`,
-          background: theme.colors.bgSecondary,
+          borderBottom: `1px solid var(--dwo-color-border)`,
+          background: 'var(--dwo-color-bg-secondary)',
         }}>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <input
@@ -65,20 +62,20 @@ export function AgentOrchestrator() {
               placeholder="Task name..."
               value={newTaskName}
               onChange={e => setNewTaskName(e.target.value)}
-              style={styles.input(theme)}
+              style={styles.input()}
             />
             <select
               value={newTaskType}
               onChange={e => setNewTaskType(e.target.value)}
-              style={styles.select(theme)}
+              style={styles.select()}
             >
               <option value="analyzer">Analyzer</option>
               <option value="tester">Tester</option>
               <option value="documenter">Documenter</option>
               <option value="refactorer">Refactorer</option>
             </select>
-            <button onClick={handleCreateTask} style={styles.button(theme)}>Create</button>
-            <button onClick={() => setIsCreating(false)} style={styles.secondaryButton(theme)}>Cancel</button>
+            <button onClick={handleCreateTask} style={styles.button()}>Create</button>
+            <button onClick={() => setIsCreating(false)} style={styles.secondaryButton()}>Cancel</button>
           </div>
         </div>
       )}
@@ -89,7 +86,7 @@ export function AgentOrchestrator() {
           <div style={{
             padding: '40px',
             textAlign: 'center',
-            color: theme.colors.textMuted,
+            color: 'var(--dwo-color-text-muted)',
           }}>
             <div style={{ fontSize: '40px', marginBottom: '16px' }}>🤖</div>
             <div style={{ fontSize: '14px', marginBottom: '8px' }}>No agent tasks yet</div>
@@ -107,26 +104,26 @@ export function AgentOrchestrator() {
       {/* Agent configs */}
       <div style={{
         padding: '12px 16px',
-        borderTop: `1px solid ${theme.colors.border}`,
-        background: theme.colors.bgSecondary,
+        borderTop: `1px solid var(--dwo-color-border)`,
+        background: 'var(--dwo-color-bg-secondary)',
       }}>
-        <div style={{ fontSize: '11px', color: theme.colors.textMuted, marginBottom: '8px' }}>
+        <div style={{ fontSize: '11px', color: 'var(--dwo-color-text-muted)', marginBottom: '8px' }}>
           Available Agents: {configs.length}
         </div>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           {configs.length === 0 ? (
-            <span style={{ fontSize: '11px', color: theme.colors.textMuted }}>No agent configurations</span>
+            <span style={{ fontSize: '11px', color: 'var(--dwo-color-text-muted)' }}>No agent configurations</span>
           ) : (
             configs.map(config => (
               <div
                 key={config.id}
                 style={{
                   padding: '4px 8px',
-                  background: config.enabled ? '#1a3a1a' : theme.colors.bgTertiary,
-                  border: `1px solid ${config.enabled ? '#4ade80' : theme.colors.border}`,
-                  borderRadius: '4px',
+                  background: config.enabled ? `var(--dwo-color-success)18` : 'var(--dwo-color-bg-tertiary)',
+                  border: `1px solid ${config.enabled ? 'var(--dwo-color-success)' : 'var(--dwo-color-border)'}`,
+                  borderRadius: 'var(--dwo-radius-sm)',
                   fontSize: '11px',
-                  color: config.enabled ? '#4ade80' : theme.colors.textMuted,
+                  color: config.enabled ? 'var(--dwo-color-success)' : 'var(--dwo-color-text-muted)',
                 }}
               >
                 {config.name} ({config.type})
@@ -139,13 +136,12 @@ export function AgentOrchestrator() {
   );
 }
 
-function AgentTaskCard({ task }: { task: { status: string } & Record<string, any> }) {
-  const { theme } = useTheme();
-  const statusColors = {
-    pending: theme.colors.textMuted,
-    running: theme.colors.accent,
-    completed: '#4ade80',
-    failed: '#f87171',
+function AgentTaskCard({ task }: { task: AgentTask }) {
+    const statusColors = {
+    pending: 'var(--dwo-color-text-muted)',
+    running: 'var(--dwo-color-accent)',
+    completed: 'var(--dwo-color-success)',
+    failed: 'var(--dwo-color-error)',
   };
 
   return (
@@ -154,9 +150,9 @@ function AgentTaskCard({ task }: { task: { status: string } & Record<string, any
       alignItems: 'center',
       gap: '12px',
       padding: '12px',
-      background: theme.colors.bg,
-      border: `1px solid ${theme.colors.border}`,
-      borderRadius: '6px',
+      background: 'var(--dwo-color-bg)',
+      border: `1px solid var(--dwo-color-border)`,
+      borderRadius: 'var(--dwo-radius-md)',
     }}>
       <div style={{
         width: '8px',
@@ -165,15 +161,15 @@ function AgentTaskCard({ task }: { task: { status: string } & Record<string, any
         background: statusColors[task.status as keyof typeof statusColors],
       }} />
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: '12px', fontWeight: 500, color: theme.colors.text }}>
+        <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--dwo-color-text)' }}>
           {task.name}
         </div>
-        <div style={{ fontSize: '11px', color: theme.colors.textMuted, marginTop: '2px' }}>
+        <div style={{ fontSize: '11px', color: 'var(--dwo-color-text-muted)', marginTop: '2px' }}>
           {task.agent_type} · {task.progress}%
         </div>
       </div>
       {task.output && (
-        <div style={{ fontSize: '11px', color: theme.colors.textMuted, maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <div style={{ fontSize: '11px', color: 'var(--dwo-color-text-muted)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {task.output}
         </div>
       )}
@@ -182,40 +178,40 @@ function AgentTaskCard({ task }: { task: { status: string } & Record<string, any
 }
 
 const styles = {
-  button: (t: any) => ({
-    background: t.colors.accent,
+  button: () => ({
+    background: 'var(--dwo-color-accent)',
     color: '#fff',
     border: 'none',
     padding: '6px 12px',
-    borderRadius: '4px',
+    borderRadius: 'var(--dwo-radius-sm)',
     cursor: 'pointer',
     fontSize: '12px',
     fontWeight: 500,
   }),
-  secondaryButton: (t: any) => ({
-    background: t.colors.bgTertiary,
-    color: t.colors.text,
-    border: `1px solid ${t.colors.border}`,
+  secondaryButton: () => ({
+    background: 'var(--dwo-color-bg)',
+    color: 'var(--dwo-color-text)',
+    border: `1px solid var(--dwo-color-border)`,
     padding: '6px 12px',
-    borderRadius: '4px',
+    borderRadius: 'var(--dwo-radius-sm)',
     cursor: 'pointer',
     fontSize: '12px',
   }),
-  input: (t: any) => ({
+  input: () => ({
     flex: 1,
-    background: t.colors.bg,
-    border: `1px solid ${t.colors.border}`,
-    color: t.colors.text,
+    background: 'var(--dwo-color-bg)',
+    border: `1px solid var(--dwo-color-border)`,
+    color: 'var(--dwo-color-text)',
     padding: '6px 10px',
-    borderRadius: '4px',
+    borderRadius: 'var(--dwo-radius-sm)',
     fontSize: '12px',
   }),
-  select: (t: any) => ({
-    background: t.colors.bg,
-    border: `1px solid ${t.colors.border}`,
-    color: t.colors.text,
+  select: () => ({
+    background: 'var(--dwo-color-bg)',
+    border: `1px solid var(--dwo-color-border)`,
+    color: 'var(--dwo-color-text)',
     padding: '6px 10px',
-    borderRadius: '4px',
+    borderRadius: 'var(--dwo-radius-sm)',
     fontSize: '12px',
   }),
 };

@@ -7,8 +7,7 @@ import { FileBrowser } from '@/components/ide/FileBrowser';
 import { GitPanel } from '@/components/git/GitPanel';
 import { TabBar, type Tab } from '@/components/ide/TabBar';
 import { useOpenFiles } from '@/hooks/useOpenFiles';
-import { useTheme } from '@/contexts/ThemeContext';
-import { readFile, writeFile, pickFolder } from '@/lib/api';
+import { pickFolder } from '@/lib/api';
 import { LargePlaceholder } from '@/lib/setiIcons';
 import { invoke, isTauri } from '@/lib/tauri';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
@@ -122,7 +121,7 @@ function getFileCategory(path: string): FileCategory {
   return 'code';
 }
 
-function ImageViewer({ filePath, theme }: { filePath: string; theme: any }) {
+function ImageViewer({ filePath }: { filePath: string }) {
   const [hasError, setHasError] = useState(false);
   const imageUrl = toViewableUrl(filePath);
 
@@ -133,13 +132,13 @@ function ImageViewer({ filePath, theme }: { filePath: string; theme: any }) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: theme.colors.bg,
+        background: 'var(--dwo-color-bg)',
         padding: '20px',
       }}>
-        <div style={{ textAlign: 'center', color: '#888' }}>
+        <div style={{ textAlign: 'center', color: 'var(--dwo-color-text-muted)' }}>
           <div style={{ fontSize: '48px', marginBottom: '12px' }}>🖼️</div>
           <div>Failed to load image</div>
-          <div style={{ fontSize: '11px', color: '#555', marginTop: '8px' }}>{filePath}</div>
+          <div style={{ fontSize: '11px', color: 'var(--dwo-color-text-muted)', marginTop: '8px' }}>{filePath}</div>
         </div>
       </div>
     );
@@ -151,7 +150,7 @@ function ImageViewer({ filePath, theme }: { filePath: string; theme: any }) {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      background: theme.colors.bg,
+      background: 'var(--dwo-color-bg)',
       overflow: 'auto',
       padding: '20px',
     }}>
@@ -177,10 +176,10 @@ function PdfViewer({ filePath }: { filePath: string }) {
 
   if (hasError) {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#888' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--dwo-color-text-muted)' }}>
         <LargePlaceholder type="pdf" />
         <div>PDF preview not available</div>
-        <div style={{ fontSize: '11px', color: '#555', marginTop: '8px' }}>Use your system&apos;s PDF viewer</div>
+        <div style={{ fontSize: '11px', color: 'var(--dwo-color-text-muted)', marginTop: '8px' }}>Use your system&apos;s PDF viewer</div>
       </div>
     );
   }
@@ -218,10 +217,9 @@ function FileViewer({
   onSave?: (path: string, content: string) => void;
   category: FileCategory;
 }) {
-  const { theme } = useTheme();
-
+  
   if (category === 'image') {
-    return <ImageViewer filePath={filePath} theme={theme} />;
+    return <ImageViewer filePath={filePath} />;
   }
 
   if (category === 'pdf') {
@@ -236,7 +234,7 @@ function FileViewer({
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        color: '#555',
+        color: 'var(--dwo-color-text-muted)',
         fontSize: '13px',
         gap: '8px',
         padding: '20px',
@@ -278,8 +276,7 @@ export function IDEView({ initialPath }: IDEViewProps) {
     updateContent,
     setActiveFilePath,
   } = useOpenFiles();
-  const { theme } = useTheme();
-
+  
   // Mirror of `openFiles` for the file-changed listener: keeps the
   // subscription stable instead of re-listening on every tab change.
   const openFilesRef = useRef(openFiles);
@@ -428,24 +425,34 @@ export function IDEView({ initialPath }: IDEViewProps) {
       <div style={{
         flex: 1,
         display: 'flex',
-        flexDirection: 'column',
+        flexDirection: 'row',
+        width: '100%',
+        height: '100%',
+        minHeight: 0,
+        minWidth: 0,
         overflow: 'hidden',
-        background: theme.colors.bg,
+        background: 'var(--dwo-color-bg)',
+        boxSizing: 'border-box',
       }}>
         {/* Left Panel: Prompt to pick folder */}
         <div style={{
           width: '250px',
           minWidth: '200px',
-          borderRight: `1px solid ${theme.colors.border}`,
+          maxWidth: '400px',
+          height: '100%',
+          minHeight: 0,
+          flexShrink: 0,
+          borderRight: `1px solid var(--dwo-color-border)`,
           display: 'flex',
           flexDirection: 'column',
-          background: theme.colors.bg,
+          background: 'var(--dwo-color-bg)',
+          boxSizing: 'border-box',
         }}>
           <div style={{
             padding: '8px 12px',
-            borderBottom: `1px solid ${theme.colors.border}`,
+            borderBottom: `1px solid var(--dwo-color-border)`,
             fontSize: '11px',
-            color: theme.colors.textMuted,
+            color: 'var(--dwo-color-text-muted)',
             fontWeight: 600,
             textTransform: 'uppercase',
             letterSpacing: '0.05em',
@@ -462,10 +469,10 @@ export function IDEView({ initialPath }: IDEViewProps) {
             gap: '16px',
           }}>
             <LargePlaceholder type="folder" />
-            <div style={{ fontSize: '14px', color: theme.colors.text, textAlign: 'center' }}>
+            <div style={{ fontSize: '14px', color: 'var(--dwo-color-text)', textAlign: 'center' }}>
               Open a Folder
             </div>
-            <div style={{ fontSize: '12px', color: theme.colors.textMuted, textAlign: 'center' }}>
+            <div style={{ fontSize: '12px', color: 'var(--dwo-color-text-muted)', textAlign: 'center' }}>
               Browse any folder on your system
             </div>
             <button
@@ -474,7 +481,7 @@ export function IDEView({ initialPath }: IDEViewProps) {
               style={{
                 marginTop: '12px',
                 padding: '8px 20px',
-                background: theme.colors.accent,
+                background: 'var(--dwo-color-accent)',
                 color: '#fff',
                 border: 'none',
                 borderRadius: '6px',
@@ -502,7 +509,12 @@ export function IDEView({ initialPath }: IDEViewProps) {
           flex: 1,
           display: 'flex',
           flexDirection: 'column',
-          background: theme.colors.bg,
+          height: '100%',
+          minHeight: 0,
+          minWidth: 0,
+          overflow: 'hidden',
+          background: 'var(--dwo-color-bg)',
+          boxSizing: 'border-box',
         }}>
           <div style={{
             flex: 1,
@@ -510,13 +522,13 @@ export function IDEView({ initialPath }: IDEViewProps) {
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            color: theme.colors.textMuted,
+            color: 'var(--dwo-color-text-muted)',
             fontSize: '13px',
             gap: '8px',
           }}>
             <LargePlaceholder type="file" />
             <div>Select a folder to explore</div>
-            <div style={{ fontSize: '11px', color: theme.colors.textMuted, opacity: 0.7 }}>
+            <div style={{ fontSize: '11px', color: 'var(--dwo-color-text-muted)', opacity: 0.7 }}>
               Click "Select Folder" in the explorer panel
             </div>
           </div>
@@ -529,24 +541,34 @@ export function IDEView({ initialPath }: IDEViewProps) {
     <div style={{
       flex: 1,
       display: 'flex',
+      flexDirection: 'row',
+      width: '100%',
+      height: '100%',
+      minHeight: 0,
+      minWidth: 0,
       overflow: 'hidden',
-      background: theme.colors.bg,
+      background: 'var(--dwo-color-bg)',
+      boxSizing: 'border-box',
     }}>
       {/* Left Panel: File Browser */}
       <div style={{
         width: '250px',
         minWidth: '200px',
         maxWidth: '400px',
-        borderRight: `1px solid ${theme.colors.border}`,
+        height: '100%',
+        minHeight: 0,
+        flexShrink: 0,
+        borderRight: `1px solid var(--dwo-color-border)`,
         display: 'flex',
         flexDirection: 'column',
-        background: theme.colors.bg,
+        background: 'var(--dwo-color-bg)',
+        boxSizing: 'border-box',
       }}>
         <div style={{
           padding: '8px 12px',
-          borderBottom: `1px solid ${theme.colors.border}`,
+          borderBottom: `1px solid var(--dwo-color-border)`,
           fontSize: '11px',
-          color: theme.colors.textMuted,
+          color: 'var(--dwo-color-text-muted)',
           fontWeight: 600,
           textTransform: 'uppercase',
           letterSpacing: '0.05em',
@@ -561,7 +583,7 @@ export function IDEView({ initialPath }: IDEViewProps) {
             style={{
               background: 'none',
               border: 'none',
-              color: theme.colors.textMuted,
+              color: 'var(--dwo-color-text-muted)',
               cursor: isPicking ? 'not-allowed' : 'pointer',
               fontSize: '11px',
               padding: '2px 6px',
@@ -571,27 +593,13 @@ export function IDEView({ initialPath }: IDEViewProps) {
               gap: '4px',
               transition: 'color 0.15s',
             }}
-            onMouseEnter={e => { if (!isPicking) e.currentTarget.style.color = theme.colors.text; }}
-            onMouseLeave={e => { e.currentTarget.style.color = theme.colors.textMuted; }}
+            onMouseEnter={e => { if (!isPicking) e.currentTarget.style.color = 'var(--dwo-color-text)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'var(--dwo-color-text-muted)'; }}
             title="Open different folder"
           >
             <span>➕</span>
             <span>{isPicking ? '...' : 'Add'}</span>
           </button>
-        </div>
-
-        {/* Path breadcrumb */}
-        <div style={{
-          padding: '6px 12px',
-          borderBottom: `1px solid ${theme.colors.border}`,
-          fontSize: '11px',
-          color: theme.colors.textMuted,
-          fontFamily: 'monospace',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}>
-          {currentRootPath}
         </div>
 
         {/* File tree — flexible so the Source Control section fits below it */}
@@ -619,8 +627,12 @@ export function IDEView({ initialPath }: IDEViewProps) {
         flex: 1,
         display: 'flex',
         flexDirection: 'column',
+        height: '100%',
+        minHeight: 0,
+        minWidth: 0,
         overflow: 'hidden',
-        background: theme.colors.bg,
+        background: 'var(--dwo-color-bg)',
+        boxSizing: 'border-box',
       }}>
         {/* Tab Bar */}
         {tabs.length > 0 && (
@@ -638,9 +650,9 @@ export function IDEView({ initialPath }: IDEViewProps) {
             role="alert"
             style={{
               padding: '6px 12px',
-              background: '#ff6b6b22',
-              borderBottom: '1px solid #ff6b6b44',
-              color: '#ff9999',
+              background: `var(--dwo-color-error)22`,
+              borderBottom: `1px solid var(--dwo-color-error)44`,
+              color: 'var(--dwo-color-error)',
               fontSize: '11px',
               display: 'flex',
               alignItems: 'center',
@@ -654,8 +666,8 @@ export function IDEView({ initialPath }: IDEViewProps) {
               onClick={clearFileError}
               style={{
                 background: 'transparent',
-                border: '1px solid #ff6b6b44',
-                color: '#ff9999',
+                border: `1px solid var(--dwo-color-error)44`,
+                color: 'var(--dwo-color-error)',
                 borderRadius: '3px',
                 cursor: 'pointer',
                 fontSize: '11px',
@@ -684,17 +696,17 @@ export function IDEView({ initialPath }: IDEViewProps) {
               flexDirection: 'column',
               alignItems: 'center',
               justifyContent: 'center',
-              color: theme.colors.textMuted,
+              color: 'var(--dwo-color-text-muted)',
               fontSize: '13px',
               userSelect: 'none',
               gap: '8px',
             }}>
         <LargePlaceholder type="file" />
               <div>Select a file to view</div>
-              <div style={{ fontSize: '11px', color: theme.colors.textMuted, opacity: 0.7 }}>
+              <div style={{ fontSize: '11px', color: 'var(--dwo-color-text-muted)', opacity: 0.7 }}>
                 Click any file in the explorer to open it
               </div>
-              <div style={{ fontSize: '11px', color: theme.colors.textMuted, opacity: 0.5, marginTop: '8px' }}>
+              <div style={{ fontSize: '11px', color: 'var(--dwo-color-text-muted)', opacity: 0.5, marginTop: '8px' }}>
                 Supports: Code, Images (PNG, JPG, GIF, SVG), PDFs
               </div>
             </div>

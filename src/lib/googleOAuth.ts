@@ -11,6 +11,7 @@
  */
 
 import { loadGoogleScript } from './gsi';
+import type { GoogleTokenResponse } from '@/types/google';
 
 export interface OAuthProfile {
   email: string;
@@ -33,8 +34,7 @@ function isTauriRuntime(): boolean {
   try {
     return (
       typeof window !== 'undefined' &&
-      ((window as any).__TAURI__ !== undefined ||
-        (window as any).__TAURI_INTERNALS__ !== undefined)
+      (window.__TAURI__ !== undefined || window.__TAURI_INTERNALS__ !== undefined)
     );
   } catch {
     return false;
@@ -259,7 +259,7 @@ async function handleOAuthResponse(params: URLSearchParams): Promise<OAuthResult
 // ---------------------------------------------------------------------------
 
 export async function googleOAuthWithGSI(clientId: string): Promise<OAuthResult> {
-  const gsi = (window as any).google?.accounts?.oauth2;
+  const gsi = window.google?.accounts?.oauth2;
   if (!gsi) {
     throw new Error('Google Identity Services not loaded');
   }
@@ -268,10 +268,11 @@ export async function googleOAuthWithGSI(clientId: string): Promise<OAuthResult>
     const client = gsi.initTokenClient({
       client_id: clientId,
       scope: 'email profile openid',
-      callback: (response: any) => {
+      callback: (response: GoogleTokenResponse) => {
         if (response.access_token) {
+          const token = response.access_token;
           fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-            headers: { Authorization: `Bearer ${response.access_token}` },
+            headers: { Authorization: `Bearer ${token}` },
           })
             .then((r) => r.json())
             .then((profile) => {
@@ -281,7 +282,7 @@ export async function googleOAuthWithGSI(clientId: string): Promise<OAuthResult>
                   name: profile.name || profile.email?.split('@')[0] || 'User',
                   picture: profile.picture || '',
                 },
-                accessToken: response.access_token,
+                accessToken: token,
                 expiresIn: response.expires_in || 3600,
               });
             })
@@ -302,7 +303,7 @@ export async function googleOAuthWithGSI(clientId: string): Promise<OAuthResult>
 
 export async function signInWithGoogle(clientId: string): Promise<OAuthResult> {
   // Try GSI first if script is loaded (browser only; skipped in Tauri)
-  if (!isTauriRuntime() && (window as any).google?.accounts?.oauth2) {
+  if (!isTauriRuntime() && window.google?.accounts?.oauth2) {
     try {
       return await googleOAuthWithGSI(clientId);
     } catch (err) {
@@ -319,7 +320,7 @@ export async function signInWithGoogle(clientId: string): Promise<OAuthResult> {
 // ---------------------------------------------------------------------------
 
 export function getGoogleClientId(): string | null {
-  const envId = (process.env as any).NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+  const envId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
   if (envId) return envId;
 
   try {

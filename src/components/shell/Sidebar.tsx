@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, type ReactNode } from 'react';
+import React from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { isTauri } from '@/lib/tauri';
@@ -17,7 +18,9 @@ interface SidebarProps {
   onCloseWorkspace?: (id: string) => void;
   onActivateWorkspace?: (id: string) => void;
   onOpenHandoff?: () => void;
+  /** Whether the sidebar is currently open (drives the toggle icon: X vs hamburger). */
   sidebarOpen?: boolean;
+  /** Toggle the sidebar (close from inside, or open from the closed rail). */
   onSidebarToggle?: () => void;
 }
 
@@ -74,12 +77,21 @@ function NavButton({
   active,
   onClick,
   children,
+  sidebarOpen = true,
 }: {
   active: boolean;
   onClick: () => void;
   children: ReactNode;
+  /** Whether the sidebar is fully open (true) or collapsed to rail (false). */
+  sidebarOpen?: boolean;
 }) {
   const [hovered, setHovered] = useState(false);
+
+  // In rail mode, children is [icon, label]. We only render the icon, centered.
+  const renderedChildren = sidebarOpen
+    ? children
+    : React.Children.toArray(children)[0];
+
   return (
     <button
       onClick={onClick}
@@ -87,6 +99,9 @@ function NavButton({
       onMouseLeave={() => setHovered(false)}
       style={{
         ...NAV_ITEM_BASE,
+        // In rail mode, center the icon and reduce padding
+        justifyContent: sidebarOpen ? 'flex-start' : 'center',
+        padding: sidebarOpen ? '7px 10px' : '7px 0',
         color: active
           ? 'var(--dwo-color-text, #e8e8e8)'
           : hovered
@@ -99,10 +114,11 @@ function NavButton({
             : 'transparent',
       }}
     >
-      {children}
+      {renderedChildren}
     </button>
   );
 }
+
 
 function WorkspaceItem({
   ws,
@@ -318,13 +334,22 @@ export function Sidebar({
     setMainView?.(viewId);
   };
 
-  return (
+  
+  // Rail mode: when the sidebar is collapsed to its 48px rail, the rail
+  // must show ONLY the toggle button. Every other block keeps its layout space
+  // (visibility, not display) so the width transition stays smooth, but nothing
+  // else is visible or hit-testable.
+  const railHidden: React.CSSProperties = sidebarOpen ? {} : { visibility: 'hidden' };
+
+return (
     <aside
       style={{
-        width: '240px',
-        // Fill the flex row (100vh shell minus the 44px top strip), never
-        // demand a full viewport height — minHeight:100vh clipped the footer
-        // by exactly the strip height with overflow:hidden giving no escape.
+        width: sidebarOpen ? '240px' : '48px',
+        minWidth: sidebarOpen ? '240px' : '48px',
+        maxWidth: sidebarOpen ? '240px' : '48px',
+        // Fill the flex row (the full main row now that the old top strip is
+        // gone). Never demand a full viewport height — minHeight:100vh clipped
+        // the footer with overflow:hidden giving no escape.
         height: '100%',
         minHeight: 0,
         alignSelf: 'stretch',
@@ -334,6 +359,7 @@ export function Sidebar({
         flexDirection: 'column',
         overflow: 'hidden',
         flexShrink: 0,
+        transition: 'width 0.2s cubic-bezier(0.4,0,0.2,1), min-width 0.2s cubic-bezier(0.4,0,0.2,1), max-width 0.2s cubic-bezier(0.4,0,0.2,1)',
       }}
     >
       {/* Logo & Title + Sidebar Toggle */}
@@ -348,24 +374,12 @@ export function Sidebar({
           flexShrink: 0,
         }}
       >
-        {/* Row 1: Logo + Sidebar Toggle (inline) */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-          <img
-            src="/logo.png"
-            alt="DWO"
-            style={{
-              height: '36px',
-              width: 'auto',
-              maxHeight: '48px',
-              maxWidth: '100%',
-              borderRadius: '4px',
-              objectFit: 'contain',
-            }}
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-            }}
-          />
-          {/* Sidebar close button (hamburger/X) - inside sidebar */}
+        {/* Row 1: Sidebar Toggle + Logo (inline). The toggle sits FIRST so it
+            remains visible when the sidebar collapses to its 48px rail —
+            that is the only control needed to reopen it. Exactly one toggle
+            exists app-wide: this button (no top-strip duplicate). */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: '8px', width: '100%' }}>
+          {/* Sidebar toggle — X when open, hamburger when closed */}
           <button
             onClick={() => onSidebarToggle?.()}
             style={{
@@ -381,13 +395,14 @@ export function Sidebar({
               color: 'var(--dwo-color-text-muted)',
               transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
               opacity: 0.7,
+              flexShrink: 0,
             }}
-            onMouseEnter={e => {
+            onMouseEnter={(e) => {
               e.currentTarget.style.background = 'var(--dwo-color-bg-tertiary)';
               e.currentTarget.style.opacity = '1';
               e.currentTarget.style.color = 'var(--dwo-color-text)';
             }}
-            onMouseLeave={e => {
+            onMouseLeave={(e) => {
               e.currentTarget.style.background = 'transparent';
               e.currentTarget.style.opacity = '0.7';
               e.currentTarget.style.color = 'var(--dwo-color-text-muted)';
@@ -409,7 +424,23 @@ export function Sidebar({
               </svg>
             )}
           </button>
-        </div>
+          <img
+            src="/logo.png"
+            alt="DWO"
+            style={{
+              height: '36px',
+              width: 'auto',
+              maxHeight: '48px',
+              maxWidth: '100%',
+              borderRadius: '4px',
+              objectFit: 'contain',
+              ...railHidden,
+            }}
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+                  </div>
 
         {/* Row 2: Name / Title */}
         <div
@@ -422,6 +453,7 @@ export function Sidebar({
             display: 'flex',
             alignItems: 'baseline',
             gap: '5px',
+            ...railHidden,
           }}
         >
           <span>DWO</span>
@@ -451,6 +483,7 @@ export function Sidebar({
               key={view.id}
               active={localView === view.id}
               onClick={() => handleViewChange(view.id)}
+              sidebarOpen={sidebarOpen}
             >
               <svg
                 width="15"
@@ -508,14 +541,14 @@ export function Sidebar({
           ))}
         </div>
       </div>
-
-      {/* Workspaces */}
+{/* Workspaces */}
       <div
         style={{
           flex: 1,
           overflow: 'auto',
           display: 'flex',
           flexDirection: 'column',
+          ...railHidden,
         }}
       >
         {/* Section header + new button */}
@@ -750,6 +783,7 @@ export function Sidebar({
           padding: '10px 14px',
           borderTop: `1px solid ${'var(--dwo-color-border)'}`,
           flexShrink: 0,
+          ...railHidden,
         }}
       >
         {currentUser ? (

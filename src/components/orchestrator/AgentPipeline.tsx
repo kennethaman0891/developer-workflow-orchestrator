@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useTheme } from '@/contexts/ThemeContext';
 
 interface AgentTask {
   id: string;
@@ -12,8 +11,7 @@ interface AgentTask {
 }
 
 export function AgentPipeline() {
-  const { theme } = useTheme();
-  const [tasks, setTasks] = useState<AgentTask[]>([]);
+    const [tasks, setTasks] = useState<AgentTask[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
@@ -58,25 +56,25 @@ export function AgentPipeline() {
   return (
     <div style={{ flex: 1, padding: '24px', overflow: 'auto' }}>
       <div style={{ marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '20px', fontWeight: 600, color: theme.colors.text, margin: '0 0 8px 0' }}>
+        <h1 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--dwo-color-text)', margin: '0 0 8px 0' }}>
           Agent Pipeline
         </h1>
-        <p style={{ fontSize: '13px', color: theme.colors.textMuted, margin: 0 }}>
+        <p style={{ fontSize: '13px', color: 'var(--dwo-color-text-muted)', margin: 0 }}>
           Upload a ZIP file to distribute tasks across multiple agents
         </p>
       </div>
 
       {/* Upload area */}
       <div style={{
-        border: `2px dashed ${theme.colors.border}`,
+        border: `2px dashed var(--dwo-color-border)`,
         borderRadius: '8px',
         padding: '32px',
         textAlign: 'center',
         marginBottom: '24px',
         transition: 'border-color 0.2s',
       }}
-      onMouseEnter={e => e.currentTarget.style.borderColor = theme.colors.accent}
-      onMouseLeave={e => e.currentTarget.style.borderColor = theme.colors.border}
+      onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--dwo-color-accent)'}
+      onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--dwo-color-border)'}
       >
         <input
           type="file"
@@ -88,10 +86,10 @@ export function AgentPipeline() {
         />
         <label htmlFor="zip-upload" style={{ cursor: isUploading ? 'not-allowed' : 'pointer' }}>
           <div style={{ fontSize: '40px', marginBottom: '12px' }}>📦</div>
-          <div style={{ fontSize: '14px', color: theme.colors.text, marginBottom: '8px' }}>
+          <div style={{ fontSize: '14px', color: 'var(--dwo-color-text)', marginBottom: '8px' }}>
             {isUploading ? 'Processing...' : 'Drop ZIP file here or click to browse'}
           </div>
-          <div style={{ fontSize: '12px', color: theme.colors.textMuted }}>
+          <div style={{ fontSize: '12px', color: 'var(--dwo-color-text-muted)' }}>
             Supports project archives with agent configuration
           </div>
         </label>
@@ -99,18 +97,18 @@ export function AgentPipeline() {
           <div style={{ marginTop: '16px' }}>
             <div style={{
               height: '4px',
-              background: theme.colors.bgTertiary,
+              background: 'var(--dwo-color-bg-tertiary)',
               borderRadius: '2px',
               overflow: 'hidden',
             }}>
               <div style={{
                 width: `${uploadProgress}%`,
                 height: '100%',
-                background: theme.colors.accent,
+                background: 'var(--dwo-color-accent)',
                 transition: 'width 0.1s',
               }} />
             </div>
-            <div style={{ fontSize: '11px', color: theme.colors.textMuted, marginTop: '4px' }}>
+            <div style={{ fontSize: '11px', color: 'var(--dwo-color-text-muted)', marginTop: '4px' }}>
               {uploadProgress}%
             </div>
           </div>
@@ -120,7 +118,7 @@ export function AgentPipeline() {
       {/* Agent tasks */}
       {tasks.length > 0 && (
         <div>
-          <div style={{ fontSize: '12px', color: theme.colors.textMuted, marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <div style={{ fontSize: '12px', color: 'var(--dwo-color-text-muted)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             Running Agents
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -132,8 +130,8 @@ export function AgentPipeline() {
       )}
 
       {/* Agent configuration */}
-      <div style={{ marginTop: '24px', padding: '16px', background: theme.colors.bgSecondary, borderRadius: '8px', border: `1px solid ${theme.colors.border}` }}>
-        <div style={{ fontSize: '13px', fontWeight: 500, color: theme.colors.text, marginBottom: '12px' }}>
+      <div style={{ marginTop: '24px', padding: '16px', background: 'var(--dwo-color-bg-secondary)', borderRadius: '8px', border: `1px solid var(--dwo-color-border)` }}>
+        <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--dwo-color-text)', marginBottom: '12px' }}>
           Agent Configuration
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px' }}>
@@ -148,12 +146,11 @@ export function AgentPipeline() {
 }
 
 function AgentTaskCard({ task }: { task: AgentTask }) {
-  const { theme } = useTheme();
-  const statusColors = {
-    pending: theme.colors.textMuted,
-    running: theme.colors.accent,
-    completed: '#4ade80',
-    failed: '#f87171',
+    const statusColors = {
+    pending: 'var(--dwo-color-text-muted)',
+    running: 'var(--dwo-color-accent)',
+    completed: 'var(--dwo-color-success)',
+    failed: 'var(--dwo-color-error)',
   };
 
   return (
@@ -162,8 +159,8 @@ function AgentTaskCard({ task }: { task: AgentTask }) {
       alignItems: 'center',
       gap: '12px',
       padding: '12px',
-      background: theme.colors.bg,
-      border: `1px solid ${theme.colors.border}`,
+      background: 'var(--dwo-color-bg)',
+      border: `1px solid var(--dwo-color-border)`,
       borderRadius: '6px',
     }}>
       <div style={{
@@ -173,14 +170,14 @@ function AgentTaskCard({ task }: { task: AgentTask }) {
         background: statusColors[task.status],
       }} />
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: '12px', fontWeight: 500, color: theme.colors.text }}>
+        <div style={{ fontSize: '12px', fontWeight: 500, color: 'var(--dwo-color-text)' }}>
           {task.name}
         </div>
-        <div style={{ fontSize: '11px', color: theme.colors.textMuted, marginTop: '2px' }}>
+        <div style={{ fontSize: '11px', color: 'var(--dwo-color-text-muted)', marginTop: '2px' }}>
           {task.output || task.status}
         </div>
       </div>
-      <div style={{ fontSize: '11px', color: theme.colors.textMuted, minWidth: '40px', textAlign: 'right' }}>
+      <div style={{ fontSize: '11px', color: 'var(--dwo-color-text-muted)', minWidth: '40px', textAlign: 'right' }}>
         {task.progress}%
       </div>
     </div>
@@ -188,19 +185,18 @@ function AgentTaskCard({ task }: { task: AgentTask }) {
 }
 
 function AgentConfigSlot({ label, icon, enabled }: { label: string; icon: string; enabled: boolean }) {
-  const { theme } = useTheme();
-  return (
+    return (
     <div style={{
       padding: '12px',
-      background: theme.colors.bgTertiary,
-      border: `1px solid ${enabled ? theme.colors.border : theme.colors.border}`,
+      background: 'var(--dwo-color-bg-tertiary)',
+      border: `1px solid ${enabled ? 'var(--dwo-color-border)' : 'var(--dwo-color-border)'}`,
       borderRadius: '6px',
       opacity: enabled ? 1 : 0.5,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         <span style={{ fontSize: '16px' }}>{icon}</span>
-        <span style={{ fontSize: '12px', color: theme.colors.text }}>{label}</span>
-        {enabled && <span style={{ fontSize: '10px', color: '#4ade80' }}>✓</span>}
+        <span style={{ fontSize: '12px', color: 'var(--dwo-color-text)' }}>{label}</span>
+        {enabled && <span style={{ fontSize: '10px', color: 'var(--dwo-color-success)' }}>✓</span>}
       </div>
     </div>
   );

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { useTheme } from '@/contexts/ThemeContext';
 import { useAuth, type User } from '@/contexts/AuthContext';
 import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton';
 
@@ -48,12 +47,6 @@ function validatePassword(pw: string): string | null {
   return null;
 }
 
-function getRadius(isCarbon: boolean, isOcean: boolean): string {
-  if (isCarbon) return '2px';
-  if (isOcean) return '8px';
-  return '10px';
-}
-
 // ── Sub-components ───────────────────────────────────────────────────────────
 
 /** Generic input field with label, optional error, focus tracking, and trailing content. */
@@ -68,21 +61,15 @@ function Field({
   autoFocus?: boolean; onKeyDown?: (e: React.KeyboardEvent) => void;
   maxLength?: number; autoComplete?: string;
 }) {
-  const { theme } = useTheme();
-  const [focused, setFocused] = useState(false);
-  const showError = touched && !!error;
+  
+    const [_focused, setFocused] = useState(false);
+    const showError = touched && !!error;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
       <label
         htmlFor={id}
-        style={{
-          fontSize: '11px',
-          fontWeight: 500,
-          color: theme.colors.textMuted,
-          textTransform: 'uppercase',
-          letterSpacing: '0.06em',
-        }}
+        style={{ fontSize: '11px', fontWeight: 500, color: 'var(--dwo-color-text-muted, #868a8f)', textTransform: 'uppercase', letterSpacing: '0.06em' }}
       >
         {label}
       </label>
@@ -101,20 +88,8 @@ function Field({
           onBlur={() => { setFocused(false); onBlur?.(); }}
           onFocus={() => setFocused(true)}
           onKeyDown={onKeyDown}
-          style={{
-            width: '100%',
-            padding: trailing ? '10px 42px 10px 12px' : '10px 12px',
-            background: theme.colors.bg,
-            border: `1.5px solid ${showError ? theme.colors.error : focused ? theme.colors.accent : theme.colors.border}`,
-            borderRadius: getRadius(theme.fonts.monospace.includes('IBM'), theme.fonts.monospace.includes('Dracula')),
-            color: theme.colors.text,
-            fontSize: '13px',
-            fontFamily: 'inherit',
-            outline: 'none',
-            boxSizing: 'border-box',
-            transition: 'border-color 0.15s ease',
-            ...(type === 'password' ? { letterSpacing: '0.04em' } : {}),
-          }}
+          className={`dwo-field-input${showError ? ' dwo-field-error' : ''}`}
+          style={trailing ? { padding: '10px 42px 10px 12px' } : undefined}
         />
         {trailing && (
           <div style={{ position: 'absolute', right: '10px', display: 'flex', alignItems: 'center' }}>
@@ -123,7 +98,7 @@ function Field({
         )}
       </div>
       {showError && (
-        <span role="alert" style={{ fontSize: '11px', color: theme.colors.error, lineHeight: '1.3' }}>
+        <span role="alert" style={{ fontSize: '11px', color: 'var(--dwo-color-error, #f44747)', lineHeight: 1.3 }}>
           {error}
         </span>
       )}
@@ -138,36 +113,12 @@ function ActionButton({
   children: React.ReactNode; onClick: () => void;
   disabled?: boolean; loading?: boolean;
 }) {
-  const { theme } = useTheme();
+  
   return (
     <button
       onClick={onClick}
       disabled={disabled || loading}
-      style={{
-        width: '100%',
-        height: '42px',
-        background: theme.colors.accent,
-        color: '#fff',
-        border: 'none',
-        borderRadius: getRadius(theme.fonts.monospace.includes('IBM'), theme.fonts.monospace.includes('Dracula')),
-        fontSize: '13px',
-        fontWeight: 600,
-        cursor: disabled || loading ? 'not-allowed' : 'pointer',
-        opacity: disabled || loading ? 0.6 : 1,
-        fontFamily: 'inherit',
-        letterSpacing: '0.01em',
-        transition: 'background 0.15s ease, opacity 0.15s ease',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '8px',
-      }}
-      onMouseEnter={e => {
-        if (!disabled && !loading) e.currentTarget.style.background = theme.colors.accentHover;
-      }}
-      onMouseLeave={e => {
-        if (!disabled && !loading) e.currentTarget.style.background = theme.colors.accent;
-      }}
+      style={{ width: '100%', height: '42px', background: 'var(--dwo-color-accent, #ff9600)', color: '#fff', border: 'none', borderRadius: 'var(--dwo-radius-md, 8px)', fontSize: '13px', fontWeight: 600, fontFamily: 'inherit', letterSpacing: '0.01em', transition: 'background 0.15s ease, opacity 0.15s ease', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', cursor: 'pointer', boxSizing: 'border-box' }}
     >
       {loading && (
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ animation: 'spin 0.8s linear infinite' }}>
@@ -181,23 +132,12 @@ function ActionButton({
 
 /** Link-style button for secondary actions. */
 function LinkButton({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
-  const { theme } = useTheme();
+  
   return (
     <button
       onClick={onClick}
-      style={{
-        background: 'none',
-        border: 'none',
-        padding: '0',
-        color: theme.colors.accent,
-        fontSize: '12px',
-        cursor: 'pointer',
-        fontFamily: 'inherit',
-        textDecoration: 'none',
-        transition: 'color 0.12s',
-      }}
-      onMouseEnter={e => e.currentTarget.style.color = theme.colors.accentHover}
-      onMouseLeave={e => e.currentTarget.style.color = theme.colors.accent}
+      style={{ background: 'none', border: 'none', padding: 0, color: 'var(--dwo-color-accent, #ff9600)', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'none', transition: 'color 0.12s' }}
+
     >
       {children}
     </button>
@@ -207,8 +147,8 @@ function LinkButton({ children, onClick }: { children: React.ReactNode; onClick:
 // ── Auth Card ────────────────────────────────────────────────────────────────
 
 function AuthCard() {
-  const { theme, currentThemeKey } = useTheme();
-  const { registerUser, signInWithEmail, verifyEmail, resendVerificationCode, pendingUser, verification } = useAuth();
+  
+  const { registerUser, signInWithEmail, verifyEmail, resendVerificationCode, verification } = useAuth();
 
   const [step, setStep] = useState<AuthStep>('login');
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -230,6 +170,9 @@ function AuthCard() {
       setStep('verify');
       setResendIn(30);
     }
+    // Intentional: this must fire only when a fresh code arrives, not on
+    // step navigation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [verification?.freshCode]);
 
   // Focus OTP input when entering verify step
@@ -368,73 +311,51 @@ function AuthCard() {
     if (e.key === 'Enter') handleVerify();
   }, [handleVerify]);
 
-  const isCarbon = currentThemeKey === 'carbon';
-  const isOcean = currentThemeKey === 'ocean';
-  const radius = getRadius(isCarbon, isOcean);
 
   // Step icon based on current step
   const stepIcon = (() => {
     if (step === 'verify') {
       return (
         <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-          <rect x="3" y="7" width="22" height="16" rx="3" stroke={theme.colors.accent} strokeWidth="1.8" fill="none" />
-          <path d="M3 10l11 7 11-7" stroke={theme.colors.accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+          <rect x="3" y="7" width="22" height="16" rx="3" stroke="var(--dwo-color-accent)" strokeWidth="1.8" fill="none" />
+          <path d="M3 10l11 7 11-7" stroke="var(--dwo-color-accent)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
         </svg>
       );
     }
     if (mode === 'register') {
       return (
         <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-          <circle cx="14" cy="9" r="5" stroke={theme.colors.accent} strokeWidth="1.8" fill="none" />
-          <path d="M5 23c0-4.97 4.03-9 9-9s9 4.03 9 9" stroke={theme.colors.accent} strokeWidth="1.8" strokeLinecap="round" fill="none" />
-          <path d="M20 6l4 4-4 4" stroke={theme.colors.accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-          <line x1="24" y1="10" x2="16" y2="10" stroke={theme.colors.accent} strokeWidth="1.8" strokeLinecap="round" />
+          <circle cx="14" cy="9" r="5" stroke="var(--dwo-color-accent)" strokeWidth="1.8" fill="none" />
+          <path d="M5 23c0-4.97 4.03-9 9-9s9 4.03 9 9" stroke="var(--dwo-color-accent)" strokeWidth="1.8" strokeLinecap="round" fill="none" />
+          <path d="M20 6l4 4-4 4" stroke="var(--dwo-color-accent)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+          <line x1="24" y1="10" x2="16" y2="10" stroke="var(--dwo-color-accent)" strokeWidth="1.8" strokeLinecap="round" />
         </svg>
       );
     }
     // default: login
     return (
       <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-        <circle cx="14" cy="10" r="5" stroke={theme.colors.accent} strokeWidth="1.8" fill="none" />
-        <path d="M5 23c0-4.97 4.03-9 9-9s9 4.03 9 9" stroke={theme.colors.accent} strokeWidth="1.8" strokeLinecap="round" fill="none" />
-        <path d="M19 18h4M21 16v4" stroke={theme.colors.accent} strokeWidth="1.8" strokeLinecap="round" />
+        <circle cx="14" cy="10" r="5" stroke="var(--dwo-color-accent)" strokeWidth="1.8" fill="none" />
+        <path d="M5 23c0-4.97 4.03-9 9-9s9 4.03 9 9" stroke="var(--dwo-color-accent)" strokeWidth="1.8" strokeLinecap="round" fill="none" />
+        <path d="M19 18h4M21 16v4" stroke="var(--dwo-color-accent)" strokeWidth="1.8" strokeLinecap="round" />
       </svg>
     );
   })();
 
   return (
-    <div style={{
-      padding: '32px',
-      background: theme.colors.bgSecondary,
-      border: `1px solid ${theme.colors.border}`,
-      borderRadius: radius,
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      gap: '20px',
-      maxWidth: '440px',
-      width: '100%',
-      alignSelf: 'center',
-      boxShadow: `0 8px 32px ${theme.colors.bg}80`,
-    }}>
+    <div style={{ padding: '32px', background: 'var(--dwo-color-bg-secondary, #252526)', border: '1px solid var(--dwo-color-border, #3e4452)', borderRadius: 'var(--dwo-radius-lg, 12px)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', maxWidth: '440px', width: '100%', alignSelf: 'center', boxShadow: '0 8px 32px rgba(0,0,0,0.5)' }}>
       {/* Header icon */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
-        <div style={{
-          width: '64px', height: '64px',
-          borderRadius: '50%',
-          background: `linear-gradient(135deg, ${theme.colors.accent}22, ${theme.colors.accent}11)`,
-          border: `2px solid ${theme.colors.accent}44`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
+        <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: 'var(--dwo-color-bg-tertiary, #2d2d2d)', border: '2px solid var(--dwo-color-border, #3e4452)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           {stepIcon}
         </div>
         <div style={{ textAlign: 'center' }}>
-          <h2 style={{ fontSize: '16px', fontWeight: 600, color: theme.colors.text, margin: '0 0 4px 0' }}>
+          <h2 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--dwo-color-text, #f8f8f2)', margin: '0 0 4px 0', textAlign: 'center' }}>
             {step === 'verify' ? 'Verify Your Email'
              : mode === 'register' ? 'Create Your Account'
              : 'Welcome Back'}
           </h2>
-          <p style={{ fontSize: '12px', color: theme.colors.textMuted, margin: 0, lineHeight: '1.5' }}>
+          <p style={{ fontSize: '12px', color: 'var(--dwo-color-text-muted, #868a8f)', margin: 0, lineHeight: 1.5, textAlign: 'center' }}>
             {step === 'verify' ? 'We sent a 6-digit code to your inbox.'
              : mode === 'register' ? 'Join DWO to collaborate in real-time.'
              : 'Sign in to access collaborative editing features.'}
@@ -449,38 +370,19 @@ function AuthCard() {
 
       {/* Divider */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '100%' }}>
-        <div style={{ flex: 1, height: '1px', background: theme.colors.border }} />
-        <span style={{ fontSize: '11px', color: theme.colors.textMuted, textTransform: 'uppercase', letterSpacing: '0.08em' }}>or continue with email</span>
-        <div style={{ flex: 1, height: '1px', background: theme.colors.border }} />
+        <div style={{ flex: 1, height: '1px', background: 'var(--dwo-color-border, #3e4452)' }} />
+        <span style={{ fontSize: '11px', color: 'var(--dwo-color-text-muted, #868a8f)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>or continue with email</span>
+        <div style={{ flex: 1, height: '1px', background: 'var(--dwo-color-border, #3e4452)' }} />
       </div>
 
       {/* Mode toggle tabs */}
       {step !== 'verify' && (
-        <div style={{
-          display: 'flex',
-          width: '100%',
-          background: theme.colors.bg,
-          borderRadius: isCarbon ? '2px' : '10px',
-          padding: '4px',
-          gap: '4px',
-        }}>
+        <div style={{ display: 'flex', width: '100%', background: 'var(--dwo-color-bg, #1e1e1e)', borderRadius: 'var(--dwo-radius-md, 8px)', padding: '4px', gap: '4px' }}>
           {(['login', 'register'] as const).map(m => (
             <button
               key={m}
               onClick={() => switchMode(m)}
-              style={{
-                flex: 1,
-                height: '34px',
-                background: mode === m ? theme.colors.accent : 'transparent',
-                color: mode === m ? '#fff' : theme.colors.textMuted,
-                border: 'none',
-                borderRadius: isCarbon ? '2px' : '8px',
-                fontSize: '12px',
-                fontWeight: mode === m ? 600 : 400,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                transition: 'all 0.15s ease',
-              }}
+              className={`dwo-mode-tab${mode === m ? ' active' : ''}`}
             >
               {m === 'login' ? 'Sign In' : 'Create Account'}
             </button>
@@ -490,27 +392,17 @@ function AuthCard() {
 
       {/* Submit error banner */}
       {submitErr && (
-        <div role="alert" style={{
-          width: '100%',
-          padding: '10px 12px',
-          background: `${theme.colors.error}15`,
-          border: `1px solid ${theme.colors.error}30`,
-          borderRadius: radius,
-          fontSize: '12px',
-          color: theme.colors.error,
-          lineHeight: '1.4',
-        }}>
+        <div role="alert" style={{ width: '100%', padding: '10px 12px', background: 'color-mix(in srgb, var(--dwo-color-error, #f44747) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--dwo-color-error, #f44747) 20%, transparent)', borderRadius: 'var(--dwo-radius-md, 8px)', fontSize: '12px', color: 'var(--dwo-color-error, #f44747)', lineHeight: 1.4 }}>
           {submitErr}
         </div>
       )}
 
       {/* Verification step */}
       {step === 'verify' && (
-        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {/* Masked email info */}
-          <div style={{ textAlign: 'center', fontSize: '12px', color: theme.colors.textMuted }}>
+        <div style={{ width: '100%', flex: 1, minHeight: 0, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ textAlign: 'center', fontSize: '11px', color: 'var(--dwo-color-text-muted, #868a8f)' }}>
             We sent a 6-digit code to{' '}
-            <span style={{ color: theme.colors.text, fontFamily: 'monospace' }}>
+            <span style={{ fontFamily: 'var(--dwo-font-mono, "JetBrains Mono", monospace)' }}>
               {maskEmail(verifyEmailAddr || verification?.email || 'your email')}
             </span>
           </div>
@@ -519,17 +411,17 @@ function AuthCard() {
           {verification?.freshCode && (
             <div style={{
               padding: '10px 12px',
-              background: `${theme.colors.warning}15`,
-              border: `1px dashed ${theme.colors.warning}40`,
-              borderRadius: radius,
+              background: `var(--dwo-color-warning)15`,
+              border: `1px dashed var(--dwo-color-warning)40`,
+              borderRadius: 'var(--dwo-radius-md)',
               fontSize: '11px',
-              color: theme.colors.textMuted,
+              color: 'var(--dwo-color-text-muted)',
               textAlign: 'center',
               lineHeight: '1.5',
             }}>
-              <span style={{ color: theme.colors.warning, fontWeight: 500 }}>Demo mode</span> — mail service not connected yet.{' '}
+              <span style={{ color: 'var(--dwo-color-warning)', fontWeight: 500 }}>Demo mode</span> — mail service not connected yet.{' '}
               Your verification code:{' '}
-              <span style={{ fontFamily: 'monospace', fontSize: '13px', color: theme.colors.accent, fontWeight: 600, letterSpacing: '0.1em' }}>
+              <span style={{ fontFamily: 'monospace', fontSize: '13px', color: 'var(--dwo-color-accent)', fontWeight: 600, letterSpacing: '0.1em' }}>
                 {verification.freshCode}
               </span>
             </div>
@@ -553,8 +445,8 @@ function AuthCard() {
           {/* Resend link */}
           <div style={{ display: 'flex', justifyContent: 'center' }}>
             {resendIn > 0 ? (
-              <span style={{ fontSize: '11px', color: theme.colors.textMuted }}>
-                Resend code in <span style={{ fontFamily: 'monospace', color: theme.colors.accent }}>{resendIn}s</span>
+              <span style={{ fontSize: '11px', color: 'var(--dwo-color-text-muted)' }}>
+                Resend code in <span style={{ fontFamily: 'monospace', color: 'var(--dwo-color-accent)' }}>{resendIn}s</span>
               </span>
             ) : (
               <LinkButton onClick={handleResend}>Resend code</LinkButton>
@@ -643,7 +535,7 @@ function AuthCard() {
       )}
 
       {/* Legal footer */}
-      <div style={{ fontSize: '10px', color: theme.colors.textMuted, textAlign: 'center', maxWidth: '320px', lineHeight: '1.5' }}>
+      <div style={{ fontSize: '10px', color: 'var(--dwo-color-text-muted)', textAlign: 'center', maxWidth: '320px', lineHeight: '1.5' }}>
         By continuing, you agree to the DWO Terms of Service and Privacy Policy.
         <br />
         Your data stays local unless you explicitly share it.
@@ -655,7 +547,7 @@ function AuthCard() {
 // ── Main component ───────────────────────────────────────────────────────────
 
 export function CollaborationPanel({ workspaceName = 'Current Workspace' }: { workspaceName?: string }) {
-  const { theme, currentThemeKey } = useTheme();
+  
   const {
     currentUser,
     collaborators,
@@ -675,9 +567,46 @@ export function CollaborationPanel({ workspaceName = 'Current Workspace' }: { wo
     generateInviteCode();
   }, [generateInviteCode]);
 
+  // Fallback: select a hidden textarea and use execCommand('copy').
+  const fallbackCopyTextToClipboard = (text: string): boolean => {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    // Keep it out of the viewport
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    textarea.style.top = '-9999px';
+    textarea.setAttribute('readonly', '');
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    try {
+      return document.execCommand('copy');
+    } catch (err) {
+      console.error('Fallback clipboard copy failed:', err);
+      return false;
+    } finally {
+      document.body.removeChild(textarea);
+    }
+  };
+
   const handleCopyCode = useCallback(() => {
     if (invitationCode) {
-      navigator.clipboard.writeText(invitationCode);
+      // Uses the Async Clipboard API when available (requires a secure context
+      // and user gesture), falling back to the legacy document.execCommand('copy')
+      // which works in more embedded-webview scenarios (e.g. Tauri/WKWebView)
+      // where clipboard permissions may be denied. Without this fallback the
+      // raw .writeText() call throws NotAllowedError in those contexts.
+      const copyToClipboard = (text: string): boolean => {
+        if (navigator.clipboard && window.isSecureContext) {
+          navigator.clipboard.writeText(text).catch(() => {
+            // Clipboard API denied/unavailable — fall back silently below.
+            fallbackCopyTextToClipboard(text);
+          });
+          return true;
+        }
+        return fallbackCopyTextToClipboard(text);
+      };
+      copyToClipboard(invitationCode);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
@@ -685,19 +614,17 @@ export function CollaborationPanel({ workspaceName = 'Current Workspace' }: { wo
 
   const allUsers = currentUser ? [currentUser, ...collaborators] : collaborators;
   const onlineCount = allUsers.length;
-  const isCarbon = currentThemeKey === 'carbon';
-  const radius = getRadius(isCarbon, currentThemeKey === 'ocean');
 
   return (
-    <div style={{ flex: 1, display: 'flex', overflow: 'hidden', background: theme.colors.bg }}>
+    <div style={{ flex: 1, width: '100%', height: '100%', minHeight: 0, minWidth: 0, display: 'flex', overflow: 'hidden', background: 'var(--dwo-color-bg)', boxSizing: 'border-box' }}>
       {/* Main content */}
       <div style={{ flex: 1, padding: '24px', overflow: 'auto', display: 'flex', flexDirection: 'column', gap: '20px' }}>
         {/* Header */}
         <div>
-          <h1 style={{ fontSize: '20px', fontWeight: 600, color: theme.colors.text, margin: '0 0 4px 0' }}>
+          <h1 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--dwo-color-text)', margin: '0 0 4px 0' }}>
             Collaborative Editing
           </h1>
-          <p style={{ fontSize: '13px', color: theme.colors.textMuted, margin: 0 }}>
+          <p style={{ fontSize: '13px', color: 'var(--dwo-color-text-muted)', margin: 0 }}>
             Real-time collaboration · {workspaceName}
           </p>
         </div>
@@ -709,7 +636,7 @@ export function CollaborationPanel({ workspaceName = 'Current Workspace' }: { wo
           <>
             {/* Active collaborators */}
             <div>
-              <div style={{ fontSize: '12px', color: theme.colors.textMuted, marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <div style={{ fontSize: '12px', color: 'var(--dwo-color-text-muted)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 Active Collaborators ({onlineCount})
               </div>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -719,8 +646,8 @@ export function CollaborationPanel({ workspaceName = 'Current Workspace' }: { wo
                     alignItems: 'center',
                     gap: '8px',
                     padding: '6px 10px 6px 6px',
-                    background: theme.colors.bgSecondary,
-                    border: `1px solid ${theme.colors.border}`,
+                    background: 'var(--dwo-color-bg-secondary)',
+                    border: `1px solid var(--dwo-color-border)`,
                     borderRadius: '20px',
                     position: 'relative',
                   }}>
@@ -734,19 +661,19 @@ export function CollaborationPanel({ workspaceName = 'Current Workspace' }: { wo
                         objectFit: 'cover',
                       }}
                     />
-                    <span style={{ fontSize: '12px', color: theme.colors.text }}>{user.name}</span>
+                    <span style={{ fontSize: '12px', color: 'var(--dwo-color-text)' }}>{user.name}</span>
                     {user.role === 'owner' && (
                       <span style={{
                         fontSize: '9px',
-                        background: theme.colors.accent,
+                        background: 'var(--dwo-color-accent)',
                         color: '#fff',
                         padding: '1px 4px',
-                        borderRadius: '4px',
+                        borderRadius: 'var(--dwo-radius-sm)',
                       }}>
                         OWNER
                       </span>
                     )}
-                    <span style={{ width: '6px', height: '6px', background: '#4ade80', borderRadius: '50%' }} title="Online" />
+                    <span style={{ width: '6px', height: '6px', background: 'var(--dwo-color-success)', borderRadius: '50%' }} title="Online" />
                     {/* Kick button for owner */}
                     {currentUser.role === 'owner' && user.id !== currentUser.id && (
                       <button
@@ -755,7 +682,7 @@ export function CollaborationPanel({ workspaceName = 'Current Workspace' }: { wo
                           background: 'none',
                           border: 'none',
                           cursor: 'pointer',
-                          color: theme.colors.textMuted,
+                          color: 'var(--dwo-color-text-muted)',
                           padding: '2px',
                           lineHeight: 1,
                           marginLeft: '2px',
@@ -779,25 +706,25 @@ export function CollaborationPanel({ workspaceName = 'Current Workspace' }: { wo
             {/* Invite section */}
             <div style={{
               padding: '16px',
-              background: theme.colors.bgSecondary,
-              border: `1px solid ${theme.colors.border}`,
-              borderRadius: radius,
+              background: 'var(--dwo-color-bg-secondary)',
+              border: `1px solid var(--dwo-color-border)`,
+              borderRadius: 'var(--dwo-radius-md)',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
                 <div>
-                  <div style={{ fontSize: '13px', fontWeight: 500, color: theme.colors.text }}>Invite collaborators</div>
-                  <div style={{ fontSize: '11px', color: theme.colors.textMuted, marginTop: '2px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--dwo-color-text)' }}>Invite collaborators</div>
+                  <div style={{ fontSize: '11px', color: 'var(--dwo-color-text-muted)', marginTop: '2px' }}>
                     Share this code so others can join your workspace
                   </div>
                 </div>
                 <button
                   onClick={handleGenerateInvite}
                   style={{
-                    background: theme.colors.accent,
+                    background: 'var(--dwo-color-accent)',
                     color: '#fff',
                     border: 'none',
                     padding: '6px 12px',
-                    borderRadius: radius,
+                    borderRadius: 'var(--dwo-radius-md)',
                     fontSize: '12px',
                     cursor: 'pointer',
                     fontFamily: 'inherit',
@@ -806,8 +733,8 @@ export function CollaborationPanel({ workspaceName = 'Current Workspace' }: { wo
                     gap: '4px',
                     transition: 'background 0.15s',
                   }}
-                  onMouseEnter={e => e.currentTarget.style.background = theme.colors.accentHover}
-                  onMouseLeave={e => e.currentTarget.style.background = theme.colors.accent}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--dwo-color-accent-hover)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'var(--dwo-color-accent)'}
                 >
                   <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
                     <path d="M6 1v10M1 6h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -821,13 +748,13 @@ export function CollaborationPanel({ workspaceName = 'Current Workspace' }: { wo
                   <div style={{
                     flex: 1,
                     padding: '10px 12px',
-                    background: theme.colors.bg,
-                    border: `1px solid ${theme.colors.border}`,
-                    borderRadius: radius,
+                    background: 'var(--dwo-color-bg)',
+                    border: `1px solid var(--dwo-color-border)`,
+                    borderRadius: 'var(--dwo-radius-md)',
                     fontFamily: 'monospace',
                     fontSize: '16px',
                     fontWeight: 600,
-                    color: theme.colors.accent,
+                    color: 'var(--dwo-color-accent)',
                     letterSpacing: '0.1em',
                     textAlign: 'center',
                   }}>
@@ -837,10 +764,10 @@ export function CollaborationPanel({ workspaceName = 'Current Workspace' }: { wo
                     onClick={handleCopyCode}
                     style={{
                       padding: '10px 14px',
-                      background: theme.colors.bgTertiary,
-                      border: `1px solid ${theme.colors.border}`,
-                      borderRadius: radius,
-                      color: theme.colors.text,
+                      background: 'var(--dwo-color-bg-tertiary)',
+                      border: `1px solid var(--dwo-color-border)`,
+                      borderRadius: 'var(--dwo-radius-md)',
+                      color: 'var(--dwo-color-text)',
                       cursor: 'pointer',
                       fontFamily: 'inherit',
                       fontSize: '12px',
@@ -849,8 +776,8 @@ export function CollaborationPanel({ workspaceName = 'Current Workspace' }: { wo
                       gap: '4px',
                       transition: 'background 0.15s',
                     }}
-                    onMouseEnter={e => e.currentTarget.style.background = theme.colors.border}
-                    onMouseLeave={e => e.currentTarget.style.background = theme.colors.bgTertiary}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--dwo-color-border)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'var(--dwo-color-bg-tertiary)'}
                   >
                     {copied ? (
                       <>
@@ -876,12 +803,12 @@ export function CollaborationPanel({ workspaceName = 'Current Workspace' }: { wo
             {/* Code editor area */}
             <div style={{
               padding: '16px',
-              background: theme.colors.bgSecondary,
-              border: `1px solid ${theme.colors.border}`,
-              borderRadius: radius,
+              background: 'var(--dwo-color-bg-secondary)',
+              border: `1px solid var(--dwo-color-border)`,
+              borderRadius: 'var(--dwo-radius-md)',
               fontFamily: 'monospace',
               fontSize: '13px',
-              color: theme.colors.textMuted,
+              color: 'var(--dwo-color-text-muted)',
               minHeight: '200px',
               flex: 1,
             }}>
@@ -889,7 +816,7 @@ export function CollaborationPanel({ workspaceName = 'Current Workspace' }: { wo
               <div></div>
               <div><span style={{ color: '#c678dd' }}>export default function</span> <span style={{ color: '#61afef' }}>App</span>() {'{'} //</div>
               <div style={{ position: 'relative' }}>
-                <span style={{ color: theme.colors.text }}>  // Collaborative editing in progress...</span>
+                <span style={{ color: 'var(--dwo-color-text)' }}>  // Collaborative editing in progress...</span>
                 <div style={{
                   position: 'absolute',
                   left: '100%',
@@ -909,29 +836,29 @@ export function CollaborationPanel({ workspaceName = 'Current Workspace' }: { wo
       {/* Right sidebar - Comments */}
       <div style={{
         width: '280px',
-        borderLeft: `1px solid ${theme.colors.border}`,
+        borderLeft: `1px solid var(--dwo-color-border)`,
         overflow: 'auto',
         padding: '16px',
         display: 'flex',
         flexDirection: 'column',
         gap: '12px',
       }}>
-        <div style={{ fontSize: '13px', fontWeight: 600, color: theme.colors.text }}>
+        <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--dwo-color-text)' }}>
           Comments ({comments.length})
         </div>
 
         {comments.map(comment => (
           <div key={comment.id} style={{
             padding: '12px',
-            background: theme.colors.bgSecondary,
-            border: `1px solid ${theme.colors.border}`,
-            borderRadius: radius,
+            background: 'var(--dwo-color-bg-secondary)',
+            border: `1px solid var(--dwo-color-border)`,
+            borderRadius: 'var(--dwo-radius-md)',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-              <span style={{ fontSize: '11px', fontWeight: 500, color: theme.colors.text }}>{comment.user}</span>
-              {!comment.resolved && <span style={{ fontSize: '9px', color: theme.colors.accent }}>OPEN</span>}
+              <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--dwo-color-text)' }}>{comment.user}</span>
+              {!comment.resolved && <span style={{ fontSize: '9px', color: 'var(--dwo-color-accent)' }}>OPEN</span>}
             </div>
-            <div style={{ fontSize: '11px', color: theme.colors.textMuted }}>{comment.text}</div>
+            <div style={{ fontSize: '11px', color: 'var(--dwo-color-text-muted)' }}>{comment.text}</div>
           </div>
         ))}
 
@@ -941,11 +868,11 @@ export function CollaborationPanel({ workspaceName = 'Current Workspace' }: { wo
             rows={3}
             style={{
               width: '100%',
-              background: theme.colors.bg,
-              border: `1px solid ${theme.colors.border}`,
-              color: theme.colors.text,
+              background: 'var(--dwo-color-bg)',
+              border: `1px solid var(--dwo-color-border)`,
+              color: 'var(--dwo-color-text)',
               padding: '8px',
-              borderRadius: isCarbon ? '2px' : '4px',
+              borderRadius: 'var(--dwo-radius-sm)',
               fontSize: '11px',
               resize: 'none',
               outline: 'none',
@@ -958,11 +885,11 @@ export function CollaborationPanel({ workspaceName = 'Current Workspace' }: { wo
         {!currentUser && (
           <div style={{
             padding: '12px',
-            background: theme.colors.bgSecondary,
-            border: `1px dashed ${theme.colors.border}`,
-            borderRadius: radius,
+            background: 'var(--dwo-color-bg-secondary)',
+            border: `1px dashed var(--dwo-color-border)`,
+            borderRadius: 'var(--dwo-radius-md)',
             fontSize: '11px',
-            color: theme.colors.textMuted,
+            color: 'var(--dwo-color-text-muted)',
             textAlign: 'center',
           }}>
             Sign in to leave comments

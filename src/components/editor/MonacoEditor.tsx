@@ -78,11 +78,6 @@ export function loadMonaco(): Promise<MonacoModule> {
   return monacoPromise;
 }
 
-/** Reset the module cache — used by tests only. */
-export function __resetMonacoLoader(): void {
-  monacoPromise = null;
-}
-
 /**
  * Map a filesystem path to a stable Monaco `file:` URI.
  * Backslashes are normalised so Windows paths produce a consistent identity.

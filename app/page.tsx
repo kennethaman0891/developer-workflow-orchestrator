@@ -197,52 +197,6 @@ function AppShell() {
         transition: 'background 0.2s, color 0.2s',
       }}
     >
-      {/* Top strip — holds the sidebar toggle IN-FLOW so it can never
-          overlap sidebar or terminal content (replaces the old fixed button) */}
-      <div style={{
-        height: '44px',
-        flexShrink: 0,
-        display: 'flex',
-        alignItems: 'center',
-        paddingLeft: '12px',
-        background: 'var(--dwo-color-bg, #0a0a0a)',
-        borderBottom: '1px solid #1a1a1a',
-      }}>
-        <button
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-          style={{ width: '36px',
-            height: '36px',
-            background: 'var(--dwo-color-bg, #0a0a0a)',
-            border: 'none',
-            borderBottom: '1px solid var(--dwo-color-border, #1a1a1a)',
-            borderRight: '1px solid var(--dwo-color-border, #1a1a1a)',
-            borderRadius: '0 0 8px 0',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: sidebarOpen ? 'var(--dwo-color-text-muted, #888)' : 'var(--dwo-color-accent, #4a9eff)',
-            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-            opacity: 0.8, }}
-          title={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
-        >
-          {sidebarOpen ? (
-            // Close icon (X)
-            <svg width="18" height="18" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
-              <line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
-            </svg>
-          ) : (
-            // Hamburger icon (☰)
-            <svg width="18" height="18" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <rect x="2" y="3" width="12" height="1.5" rx="0.75" fill="currentColor" />
-              <rect x="2" y="7.25" width="12" height="1.5" rx="0.75" fill="currentColor" />
-              <rect x="2" y="11" width="12" height="1.5" rx="0.75" fill="currentColor" />
-            </svg>
-          )}
-        </button>
-      </div>
-
       {/* Phase 5: Diagnostics/Error Reporting */}
       <ErrorBoundary label="Diagnostics">
         <ErrorReporter />
@@ -266,9 +220,9 @@ function AppShell() {
             appeared when the sidebar was conditionally unmounted. */}
         <div
           style={{
-            width: sidebarOpen ? '240px' : '0',
-            minWidth: sidebarOpen ? '240px' : '0',
-            maxWidth: sidebarOpen ? '240px' : '0',
+            width: sidebarOpen ? '240px' : '48px',
+            minWidth: sidebarOpen ? '240px' : '48px',
+            maxWidth: sidebarOpen ? '240px' : '48px',
             overflow: 'hidden',
             flexShrink: 0,
             transition:

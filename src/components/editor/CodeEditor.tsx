@@ -68,7 +68,7 @@ export function CodeEditor({ filePath, content, onSave }: CodeEditorProps) {
 
   // Get settings from context
   const { fontSize, wordWrap } = useSettings();
-
+  
   // Keep refs in sync with props
   useEffect(() => {
     filePathRef.current = filePath;
@@ -196,7 +196,6 @@ export function CodeEditor({ filePath, content, onSave }: CodeEditorProps) {
         viewRef.current = null;
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filePath, content]); // Re-init when file or content changes
 
   // Show loading indicator while waiting for initialization
@@ -205,11 +204,11 @@ export function CodeEditor({ filePath, content, onSave }: CodeEditorProps) {
       <div
         style={{
           height: '100%',
-          background: '#1e1e1e',
+          background: 'var(--dwo-color-bg)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          color: '#888',
+          color: 'var(--dwo-color-text-muted)',
           fontSize: '13px',
         }}
       >
@@ -222,7 +221,7 @@ export function CodeEditor({ filePath, content, onSave }: CodeEditorProps) {
     <div
       style={{
         height: '100%',
-        background: '#1e1e1e',
+        background: 'var(--dwo-color-bg)',
         position: 'relative',
         overflow: 'auto',
       }}
@@ -235,10 +234,10 @@ export function CodeEditor({ filePath, content, onSave }: CodeEditorProps) {
             left: 0,
             right: 0,
             padding: '8px 12px',
-            background: '#2d1215',
-            color: '#ff6b6b',
+            background: `var(--dwo-color-error)22`,
+            color: 'var(--dwo-color-error)',
             fontSize: '12px',
-            borderBottom: '1px solid #ff4444',
+            borderBottom: `1px solid var(--dwo-color-error)44`,
             zIndex: 10,
           }}
         >

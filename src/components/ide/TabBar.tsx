@@ -32,8 +32,8 @@ export function TabBar({ tabs, activePath, onTabClick, onTabClose, className }: 
       className={className}
       style={{
         display: 'flex',
-        background: theme.colors.bg,
-        borderBottom: `1px solid ${theme.colors.border}`,
+        background: 'var(--dwo-color-bg)',
+        borderBottom: `1px solid ${'var(--dwo-color-border)'}`,
         // Tabs scroll horizontally instead of clipping past 6+ open files.
         overflowX: 'auto',
         overflowY: 'hidden',
@@ -58,10 +58,10 @@ export function TabBar({ tabs, activePath, onTabClick, onTabClose, className }: 
               padding: '0 12px',
               cursor: 'pointer',
               fontSize: '12px',
-              color: isActive ? theme.colors.text : (isHovered ? theme.colors.text : theme.colors.textMuted),
-              background: isActive ? theme.colors.bgTertiary : (isHovered ? theme.colors.bgSecondary : theme.colors.bg),
-              borderRight: `1px solid ${theme.colors.border}`,
-              borderTop: isActive ? `2px solid ${theme.colors.accent}` : '2px solid transparent',
+              color: isActive ? 'var(--dwo-color-text)' : (isHovered ? 'var(--dwo-color-text)' : 'var(--dwo-color-text-muted)'),
+              background: isActive ? 'var(--dwo-color-bg-tertiary)' : (isHovered ? 'var(--dwo-color-bg-secondary)' : 'var(--dwo-color-bg)'),
+              borderRight: `1px solid ${'var(--dwo-color-border)'}`,
+              borderTop: isActive ? `2px solid ${'var(--dwo-color-accent)'}` : '2px solid transparent',
               transition: 'all 0.15s',
               whiteSpace: 'nowrap',
               minWidth: '100px',
@@ -78,14 +78,14 @@ export function TabBar({ tabs, activePath, onTabClick, onTabClose, className }: 
               fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace',
             }}>
               {getFileName(tab.path)}
-              {tab.dirty && <span style={{ color: theme.colors.error, marginLeft: '4px' }}>●</span>}
+              {tab.dirty && <span style={{ color: 'var(--dwo-color-error)', marginLeft: '4px' }}>●</span>}
             </span>
             <button
               onClick={e => { e.stopPropagation(); onTabClose(tab.path); }}
               style={{
                 background: 'none',
                 border: 'none',
-                color: isActive || isHovered ? theme.colors.textMuted : 'transparent',
+                color: isActive || isHovered ? 'var(--dwo-color-text-muted)' : 'transparent',
                 cursor: 'pointer',
                 fontSize: '14px',
                 lineHeight: 1,
@@ -96,11 +96,11 @@ export function TabBar({ tabs, activePath, onTabClick, onTabClose, className }: 
                 transition: 'all 0.1s',
               }}
               onMouseEnter={e => {
-                e.currentTarget.style.color = theme.colors.text;
-                e.currentTarget.style.background = theme.colors.bgTertiary;
+                e.currentTarget.style.color = 'var(--dwo-color-text)';
+                e.currentTarget.style.background = 'var(--dwo-color-bg-tertiary)';
               }}
               onMouseLeave={e => {
-                e.currentTarget.style.color = (isActive || isHovered) ? theme.colors.textMuted : 'transparent';
+                e.currentTarget.style.color = (isActive || isHovered) ? 'var(--dwo-color-text-muted)' : 'transparent';
                 e.currentTarget.style.background = 'none';
               }}
               title="Close tab"

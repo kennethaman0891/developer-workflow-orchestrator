@@ -18,7 +18,8 @@ type InvokeArgs = Record<string, unknown> | undefined;
 
 /** Returns true when running inside the Tauri shell (not a plain browser). */
 export function isTauri(): boolean {
-  return typeof globalThis !== 'undefined' && !!(globalThis as any).__TAURI_INTERNALS__;
+  // `__TAURI_INTERNALS__` is declared on Window in src/types/tauri.d.ts
+  return typeof window !== 'undefined' && window.__TAURI_INTERNALS__ !== undefined;
 }
 
 export async function invoke<T = unknown>(

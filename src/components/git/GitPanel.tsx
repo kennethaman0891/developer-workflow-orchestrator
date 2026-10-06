@@ -72,7 +72,7 @@ export function GitPanel({ projectPath }: GitPanelProps) {
     : 0;
 
   return (
-    <div style={{ borderTop: `1px solid ${theme.colors.border}` }}>
+    <div style={{ borderTop: `1px solid ${'var(--dwo-color-border)'}` }}>
       {/* Header: caret + title + count badge + refresh */}
       <div
         onClick={toggleCollapsed}
@@ -96,9 +96,9 @@ export function GitPanel({ projectPath }: GitPanelProps) {
           fontWeight: 600,
           letterSpacing: '0.05em',
           textTransform: 'uppercase',
-          color: theme.colors.textMuted,
+          color: 'var(--dwo-color-text-muted)',
         }}
-        onMouseEnter={e => { e.currentTarget.style.background = theme.colors.bgTertiary; }}
+        onMouseEnter={e => { e.currentTarget.style.background = 'var(--dwo-color-bg-tertiary)'; }}
         onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
       >
         <span style={{
@@ -116,7 +116,7 @@ export function GitPanel({ projectPath }: GitPanelProps) {
             minWidth: '16px',
             padding: '0 5px',
             borderRadius: '8px',
-            background: theme.colors.accent,
+            background: 'var(--dwo-color-accent)',
             color: '#fff',
             fontSize: '10px',
             lineHeight: '16px',
@@ -135,7 +135,7 @@ export function GitPanel({ projectPath }: GitPanelProps) {
           style={{
             background: 'none',
             border: 'none',
-            color: theme.colors.textMuted,
+            color: 'var(--dwo-color-text-muted)',
             cursor: 'pointer',
             fontSize: '11px',
             padding: '0 2px',
@@ -154,7 +154,7 @@ export function GitPanel({ projectPath }: GitPanelProps) {
             <div style={{
               padding: '8px 4px',
               fontSize: '11px',
-              color: theme.colors.textMuted,
+              color: 'var(--dwo-color-text-muted)',
               textAlign: 'center',
             }}>
               Open a folder to use Source Control
@@ -166,7 +166,7 @@ export function GitPanel({ projectPath }: GitPanelProps) {
             <div style={{
               padding: '8px 4px',
               fontSize: '11px',
-              color: theme.colors.textMuted,
+              color: 'var(--dwo-color-text-muted)',
               textAlign: 'center',
             }}>
               Source control runs in the DWO desktop app.
@@ -175,7 +175,7 @@ export function GitPanel({ projectPath }: GitPanelProps) {
 
           {/* Loading */}
           {projectPath && loading && !status && (
-            <div style={{ padding: '8px 4px', fontSize: '11px', color: theme.colors.textMuted }}>
+            <div style={{ padding: '8px 4px', fontSize: '11px', color: 'var(--dwo-color-text-muted)' }}>
               Loading git status...
             </div>
           )}
@@ -189,10 +189,10 @@ export function GitPanel({ projectPath }: GitPanelProps) {
                   alignItems: 'center',
                   gap: '6px',
                   padding: '3px 8px',
-                  background: theme.colors.bgTertiary,
+                  background: 'var(--dwo-color-bg-tertiary)',
                   borderRadius: '4px',
                   fontSize: '11px',
-                  color: theme.colors.text,
+                  color: 'var(--dwo-color-text)',
                   marginBottom: '8px',
                 }}>
                   <span>🌿</span>
@@ -204,7 +204,7 @@ export function GitPanel({ projectPath }: GitPanelProps) {
                 <div style={{
                   padding: '6px 4px 10px',
                   fontSize: '11px',
-                  color: theme.colors.textMuted,
+                  color: 'var(--dwo-color-text-muted)',
                 }}>
                   No changes
                 </div>
@@ -215,7 +215,7 @@ export function GitPanel({ projectPath }: GitPanelProps) {
                 <div style={{ marginBottom: '10px' }}>
                   <div style={{
                     fontSize: '10px',
-                    color: theme.colors.textMuted,
+                    color: 'var(--dwo-color-text-muted)',
                     marginBottom: '4px',
                     textTransform: 'uppercase',
                     letterSpacing: '0.04em',
@@ -229,7 +229,7 @@ export function GitPanel({ projectPath }: GitPanelProps) {
                       gap: '8px',
                       padding: '3px 4px',
                       fontSize: '11px',
-                      color: theme.colors.text,
+                      color: 'var(--dwo-color-text)',
                     }}>
                       <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {file}
@@ -251,7 +251,7 @@ export function GitPanel({ projectPath }: GitPanelProps) {
                 <div style={{ marginBottom: '10px' }}>
                   <div style={{
                     fontSize: '10px',
-                    color: theme.colors.textMuted,
+                    color: 'var(--dwo-color-text-muted)',
                     marginBottom: '4px',
                     textTransform: 'uppercase',
                     letterSpacing: '0.04em',
@@ -265,7 +265,7 @@ export function GitPanel({ projectPath }: GitPanelProps) {
                       gap: '8px',
                       padding: '3px 4px',
                       fontSize: '11px',
-                      color: theme.colors.text,
+                      color: 'var(--dwo-color-text)',
                     }}>
                       <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {file}
@@ -287,7 +287,7 @@ export function GitPanel({ projectPath }: GitPanelProps) {
                 <div style={{ marginBottom: '10px' }}>
                   <div style={{
                     fontSize: '10px',
-                    color: theme.colors.textMuted,
+                    color: 'var(--dwo-color-text-muted)',
                     marginBottom: '4px',
                     textTransform: 'uppercase',
                     letterSpacing: '0.04em',
@@ -301,7 +301,7 @@ export function GitPanel({ projectPath }: GitPanelProps) {
                       gap: '8px',
                       padding: '3px 4px',
                       fontSize: '11px',
-                      color: theme.colors.textMuted,
+                      color: 'var(--dwo-color-text-muted)',
                     }}>
                       <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {file}
@@ -319,7 +319,7 @@ export function GitPanel({ projectPath }: GitPanelProps) {
               )}
 
               {/* Commit input */}
-              <div style={{ borderTop: `1px solid ${theme.colors.border}`, paddingTop: '8px' }}>
+              <div style={{ borderTop: `1px solid ${'var(--dwo-color-border)'}`, paddingTop: '8px' }}>
                 {commitError && (
                   <div
                     role="alert"
@@ -343,9 +343,9 @@ export function GitPanel({ projectPath }: GitPanelProps) {
                   rows={2}
                   style={{
                     width: '100%',
-                    background: theme.colors.bg,
-                    border: `1px solid ${theme.colors.border}`,
-                    color: theme.colors.text,
+                    background: 'var(--dwo-color-bg)',
+                    border: `1px solid ${'var(--dwo-color-border)'}`,
+                    color: 'var(--dwo-color-text)',
                     padding: '6px',
                     borderRadius: '4px',
                     fontSize: '11px',
@@ -360,8 +360,8 @@ export function GitPanel({ projectPath }: GitPanelProps) {
                   style={{
                     marginTop: '6px',
                     width: '100%',
-                    background: commitMessage.trim() ? theme.colors.accent : theme.colors.bgTertiary,
-                    color: commitMessage.trim() ? '#fff' : theme.colors.textMuted,
+                    background: commitMessage.trim() ? 'var(--dwo-color-accent)' : 'var(--dwo-color-bg-tertiary)',
+                    color: commitMessage.trim() ? '#fff' : 'var(--dwo-color-text-muted)',
                     border: 'none',
                     padding: '6px',
                     borderRadius: '4px',

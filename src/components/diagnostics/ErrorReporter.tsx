@@ -83,8 +83,9 @@ export function ErrorReporter() {
     };
 
     const onError = (event: ErrorEvent) => {
-      // Ignore benign ResizeObserver-loop warnings; they are not failures.
-      if (typeof event.message === 'string' && event.message.includes('ResizeObserver loop')) return;
+      // Ignore benign ResizeObserver-loop warnings and post-teardown xterm dimensions errors
+      const msg = typeof event.message === 'string' ? event.message : '';
+      if (msg.includes('ResizeObserver loop') || msg.includes('this._renderer.value.dimensions')) return;
       report('uncaught', event.error ?? event.message);
     };
     const onRejection = (event: PromiseRejectionEvent) => {

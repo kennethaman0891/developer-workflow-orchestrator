@@ -149,6 +149,7 @@ impl TerminalManager {
 
     /// Resize a session
     pub fn resize(&self, id: &str, cols: u16, rows: u16) -> Result<(), String> {
+        log::info!("[DWO-RO] terminal_resize id={} cols={} rows={}", id, cols, rows);
         let mut sessions = self.sessions.write();
         match sessions.get_mut(id) {
             Some(session) => {
@@ -245,12 +246,73 @@ impl TerminalManager {
             return Err(format!("Session not found: {}", id));
         }
         for file in files {
-            let escaped = file.replace(' ', "\\ ").replace('"', "\\\"");
+            let quoted = shell_quote_path(file);
             if let Some(session) = sessions.get(id) {
-                let input = format!("{}\x0d", escaped);
+                // Type the quoted path plus a carriage return, as before the
+                // quoting fix: the shell submits the line (quotes are stripped
+                // by the shell itself).
+                let input = format!("{}\x0d", quoted);
                 let _ = session.read().write_input(input.as_bytes());
             }
         }
         Ok(())
+    }
+}
+
+/// Quote a dropped file path for safe typing into a live shell.
+///
+/// Dropped files are pasted into the shell's input line, so a path containing
+/// shell metacharacters (`;`, `|`, `&`, `$`, spaces, quotes, ...) would
+/// otherwise be interpreted as a command (shell injection). We type a
+/// single-quoted argument so the shell treats the whole path literally:
+///
+/// * POSIX login shells (`$SHELL`, bash/zsh — see `pty.rs`): single quotes
+///   are literal; an embedded `'` is escaped as `'\''` (close quote,
+///   escaped quote, reopen quote).
+/// * PowerShell (the Windows path in `pty.rs`): single quotes are literal;
+///   an embedded `'` is escaped by doubling it.
+fn shell_quote_path(path: &str) -> String {
+    #[cfg(not(windows))]
+    {
+        format!("'{}'", path.replace('\'', "'\\''"))
+    }
+    #[cfg(windows)]
+    {
+        format!("'{}'", path.replace('\'', "''"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::shell_quote_path;
+
+    #[test]
+    fn plain_path_becomes_single_quoted() {
+        assert_eq!(shell_quote_path("/tmp/file.txt"), "'/tmp/file.txt'");
+    }
+
+    #[test]
+    fn metacharacters_stay_literal() {
+        let path = "/tmp/my file; rm -rf $HOME `id`.txt";
+        assert_eq!(shell_quote_path(path), format!("'{path}'"));
+    }
+
+    #[test]
+    fn spaces_stay_inside_one_word() {
+        assert_eq!(shell_quote_path("/tmp/a b c"), "'/tmp/a b c'");
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn posix_embedded_single_quote() {
+        // '/tmp/a' + '\'' + b'
+        assert_eq!(shell_quote_path("/tmp/a'b"), "'/tmp/a'\\''b'");
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn powershell_embedded_single_quote() {
+        // PowerShell: single quotes are literal; escape by doubling
+        assert_eq!(shell_quote_path("C:\\a'b"), "'C:\\a''b'");
     }
 }

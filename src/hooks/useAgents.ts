@@ -23,13 +23,23 @@ export interface AgentConfig {
   max_concurrent: number;
 }
 
+/**
+ * The Rust `AgentStatus` enum serializes with verbatim variant names
+ * ("Pending" | "Running" | "Completed" | "Failed"); the UI works in
+ * lowercase, so normalize every task crossing the wire here.
+ */
+const toAgentTask = (t: Omit<AgentTask, 'status'> & { status: string }): AgentTask => ({
+  ...t,
+  status: t.status.toLowerCase() as AgentTask['status'],
+});
+
 export function useAgents() {
   const [tasks, setTasks] = useState<AgentTask[]>([]);
   const [configs, setConfigs] = useState<AgentConfig[]>([]);
 
   const listTasks = useCallback(async () => {
     try {
-      const result = await invoke<AgentTask[]>('agent_list_tasks', undefined, []);
+      const result = (await invoke<AgentTask[]>('agent_list_tasks', undefined, [])).map(toAgentTask);
       setTasks(result);
       return result;
     } catch (error) {
@@ -40,7 +50,8 @@ export function useAgents() {
 
   const getTask = useCallback(async (id: string): Promise<AgentTask | null> => {
     try {
-      return await invoke<AgentTask>('agent_get_task', { id });
+      const task = await invoke<AgentTask>('agent_get_task', { id });
+      return task ? toAgentTask(task) : task;
     } catch (error) {
       console.error('Failed to get agent task:', error);
       return null;
@@ -50,7 +61,8 @@ export function useAgents() {
   const createTask = useCallback(async (name: string, agentType: string, config: object): Promise<string> => {
     try {
       const configStr = JSON.stringify(config);
-      return await invoke<string>('agent_create_task', { name, agent_type: agentType, config: configStr });
+      // Tauri camel-cases Rust arg names: `agent_create_task(name, agent_type, config)` -> { name, agentType, config }
+      return await invoke<string>('agent_create_task', { name, agentType, config: configStr });
     } catch (error) {
       console.error('Failed to create agent task:', error);
       throw error;

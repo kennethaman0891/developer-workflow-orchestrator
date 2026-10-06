@@ -4,7 +4,7 @@
  */
 
 export function isGoogleScriptLoaded(): boolean {
-  return !!(window as any).google?.accounts;
+  return !!window.google?.accounts;
 }
 
 export function loadGoogleScript(): Promise<boolean> {

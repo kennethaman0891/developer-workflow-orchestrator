@@ -1,12 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { useTheme } from '@/contexts/ThemeContext';
 import { usePlugins } from '@/hooks/usePlugins';
 
 export function PluginManager() {
-  const { theme } = useTheme();
-  const { plugins, togglePlugin, removePlugin } = usePlugins();
+    const { plugins, togglePlugin, removePlugin } = usePlugins();
   const [searchQuery, setSearchQuery] = useState('');
 
   const filteredPlugins = plugins.filter(p =>
@@ -28,14 +26,14 @@ export function PluginManager() {
     <div style={{ flex: 1, padding: '24px', overflow: 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
         <div>
-          <h1 style={{ fontSize: '20px', fontWeight: 600, color: theme.colors.text, margin: '0 0 8px 0' }}>
+          <h1 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--dwo-color-text)', margin: '0 0 8px 0' }}>
             Plugin Manager
           </h1>
-          <p style={{ fontSize: '13px', color: theme.colors.textMuted, margin: 0 }}>
+          <p style={{ fontSize: '13px', color: 'var(--dwo-color-text-muted)', margin: 0 }}>
             Extend DWO with community and built-in plugins
           </p>
         </div>
-        <button style={styles.button(theme)}>
+        <button style={styles.button()}>
           + Install Plugin
         </button>
       </div>
@@ -48,11 +46,11 @@ export function PluginManager() {
         onChange={e => setSearchQuery(e.target.value)}
         style={{
           width: '100%',
-          background: theme.colors.bg,
-          border: `1px solid ${theme.colors.border}`,
-          color: theme.colors.text,
+          background: 'var(--dwo-color-bg)',
+          border: `1px solid var(--dwo-color-border)`,
+          color: 'var(--dwo-color-text)',
           padding: '10px 12px',
-          borderRadius: '6px',
+          borderRadius: 'var(--dwo-radius-sm)',
           fontSize: '13px',
           marginBottom: '16px',
           boxSizing: 'border-box',
@@ -65,7 +63,7 @@ export function PluginManager() {
           <div style={{
             padding: '24px',
             textAlign: 'center',
-            color: theme.colors.textMuted,
+            color: 'var(--dwo-color-text-muted)',
             fontSize: '13px',
           }}>
             No plugins installed. Click "+ Install Plugin" to add one.
@@ -77,18 +75,18 @@ export function PluginManager() {
               alignItems: 'center',
               gap: '16px',
               padding: '16px',
-              background: theme.colors.bgSecondary,
-              border: `1px solid ${theme.colors.border}`,
-              borderRadius: '8px',
+              background: 'var(--dwo-color-bg-secondary)',
+              border: `1px solid var(--dwo-color-border)`,
+              borderRadius: 'var(--dwo-radius-md)',
             }}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: '13px', fontWeight: 500, color: theme.colors.text }}>
+                <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--dwo-color-text)' }}>
                   {plugin.manifest.name}
                 </div>
-                <div style={{ fontSize: '11px', color: theme.colors.textMuted, marginTop: '4px' }}>
+                <div style={{ fontSize: '11px', color: 'var(--dwo-color-text-muted)', marginTop: '4px' }}>
                   {plugin.manifest.description}
                 </div>
-                <div style={{ fontSize: '10px', color: theme.colors.textMuted, marginTop: '4px' }}>
+                <div style={{ fontSize: '10px', color: 'var(--dwo-color-text-muted)', marginTop: '4px' }}>
                   v{plugin.manifest.version} by {plugin.manifest.author}
                 </div>
               </div>
@@ -97,10 +95,10 @@ export function PluginManager() {
                   onClick={() => handleToggle(plugin)}
                   style={{
                     padding: '6px 12px',
-                    background: plugin.manifest.enabled ? theme.colors.accent : theme.colors.bgTertiary,
-                    color: plugin.manifest.enabled ? '#fff' : theme.colors.textMuted,
+                    background: plugin.manifest.enabled ? 'var(--dwo-color-accent)' : 'var(--dwo-color-bg-tertiary)',
+                    color: plugin.manifest.enabled ? '#fff' : 'var(--dwo-color-text-muted)',
                     border: 'none',
-                    borderRadius: '4px',
+                    borderRadius: 'var(--dwo-radius-sm)',
                     cursor: 'pointer',
                     fontSize: '11px',
                     fontWeight: 500,
@@ -124,12 +122,12 @@ export function PluginManager() {
 }
 
 const styles = {
-  button: (t: any) => ({
-    background: t.colors.accent,
+  button: () => ({
+    background: 'var(--dwo-color-accent)',
     color: '#fff',
     border: 'none',
     padding: '8px 16px',
-    borderRadius: '6px',
+    borderRadius: 'var(--dwo-radius-sm)',
     cursor: 'pointer',
     fontSize: '12px',
     fontWeight: 500,

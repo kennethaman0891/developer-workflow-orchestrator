@@ -13,6 +13,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
+import type { ThemeTokens } from '@/lib/themes';
 import { useWorkspaces } from '@/contexts/WorkspacesContext';
 import { selectFolder, WORKSPACE_COLORS, type WorkspaceTemplate } from '@/lib/workspace';
 
@@ -93,9 +94,9 @@ export function WizardView({ onClose, onCreated }: WizardViewProps) {
     >
       <div
         style={{
-          background: theme.colors.bgSecondary,
-          border: `1px solid ${theme.colors.border}`,
-          borderRadius: '12px',
+          background: 'var(--dwo-color-bg-secondary)',
+          border: `1px solid var(--dwo-color-border)`,
+          borderRadius: 'var(--dwo-radius-lg)',
           width: '460px',
           maxHeight: '85vh',
           overflow: 'auto',
@@ -112,7 +113,7 @@ export function WizardView({ onClose, onCreated }: WizardViewProps) {
           <h2 style={{
             fontSize: '16px',
             fontWeight: 600,
-            color: theme.colors.text,
+            color: 'var(--dwo-color-text)',
             margin: 0,
           }}>
             New Workspace
@@ -122,11 +123,11 @@ export function WizardView({ onClose, onCreated }: WizardViewProps) {
             style={{
               background: 'none',
               border: 'none',
-              color: theme.colors.textMuted,
+              color: 'var(--dwo-color-text-muted)',
               cursor: 'pointer',
               fontSize: '18px',
               padding: '4px 8px',
-              borderRadius: '4px',
+              borderRadius: 'var(--dwo-radius-sm)',
             }}
           >
             &times;
@@ -148,22 +149,22 @@ export function WizardView({ onClose, onCreated }: WizardViewProps) {
                 placeholder="/path/to/project (or pick a folder)"
                 style={{
                   flex: 1,
-                  background: theme.colors.bg,
-                  border: `1px solid ${theme.colors.border}`,
-                  color: theme.colors.text,
+                  background: 'var(--dwo-color-bg)',
+                  border: `1px solid var(--dwo-color-border)`,
+                  color: 'var(--dwo-color-text)',
                   padding: '8px 12px',
                   borderRadius: '6px',
                   fontSize: '13px',
-                  fontFamily: theme.fonts.monospace,
+                  fontFamily: 'var(--dwo-font-monospace)',
                   outline: 'none',
                 }}
               />
               <button
                 onClick={handlePickFolder}
                 style={{
-                  background: theme.colors.bgTertiary,
-                  border: `1px solid ${theme.colors.border}`,
-                  color: theme.colors.text,
+                  background: 'var(--dwo-color-bg-tertiary)',
+                  border: `1px solid var(--dwo-color-border)`,
+                  color: 'var(--dwo-color-text)',
                   padding: '8px 14px',
                   borderRadius: '6px',
                   fontSize: '13px',
@@ -191,9 +192,9 @@ export function WizardView({ onClose, onCreated }: WizardViewProps) {
                   key={n}
                   onClick={() => setTemplate(n)}
                   style={{
-                    background: template === n ? theme.colors.accent : theme.colors.bg,
-                    color: template === n ? '#fff' : theme.colors.text,
-                    border: `1px solid ${template === n ? theme.colors.accent : theme.colors.border}`,
+                    background: template === n ? 'var(--dwo-color-accent)' : 'var(--dwo-color-bg)',
+                    color: template === n ? '#fff' : 'var(--dwo-color-text)',
+                    border: `1px solid ${template === n ? 'var(--dwo-color-accent)' : 'var(--dwo-color-border)'}`,
                     borderRadius: '6px',
                     padding: '8px 0',
                     fontSize: '13px',
@@ -211,7 +212,7 @@ export function WizardView({ onClose, onCreated }: WizardViewProps) {
           {/* 3. Command (optional) */}
           <div style={{ marginBottom: '20px' }}>
             <label style={labelStyle(theme)}>
-              Auto-launch command <span style={{ color: theme.colors.textMuted, fontWeight: 400 }}>(optional)</span>
+              Auto-launch command <span style={{ color: 'var(--dwo-color-text-muted)', fontWeight: 400 }}>(optional)</span>
             </label>
             <input
               type="text"
@@ -220,13 +221,13 @@ export function WizardView({ onClose, onCreated }: WizardViewProps) {
               placeholder="e.g. opencode, claude, codex"
               style={{
                 width: '100%',
-                background: theme.colors.bg,
-                border: `1px solid ${theme.colors.border}`,
-                color: theme.colors.text,
+                background: 'var(--dwo-color-bg)',
+                border: `1px solid var(--dwo-color-border)`,
+                color: 'var(--dwo-color-text)',
                 padding: '8px 12px',
                 borderRadius: '6px',
                 fontSize: '13px',
-                fontFamily: theme.fonts.monospace,
+                fontFamily: 'var(--dwo-font-monospace)',
                 outline: 'none',
                 boxSizing: 'border-box',
               }}
@@ -248,9 +249,9 @@ export function WizardView({ onClose, onCreated }: WizardViewProps) {
                     height: '28px',
                     borderRadius: '50%',
                     background: c,
-                    border: color === c ? `2px solid ${theme.colors.text}` : '2px solid transparent',
+                    border: color === c ? `2px solid var(--dwo-color-text)` : '2px solid transparent',
                     cursor: 'pointer',
-                    outline: color === c ? `2px solid ${theme.colors.text}` : 'none',
+                    outline: color === c ? `2px solid var(--dwo-color-text)` : 'none',
                     outlineOffset: '2px',
                     transition: 'outline 0.15s',
                   }}
@@ -265,9 +266,9 @@ export function WizardView({ onClose, onCreated }: WizardViewProps) {
               onClick={onClose}
               style={{
                 flex: 1,
-                background: theme.colors.bgTertiary,
-                color: theme.colors.text,
-                border: `1px solid ${theme.colors.border}`,
+                background: 'var(--dwo-color-bg-tertiary)',
+                color: 'var(--dwo-color-text)',
+                border: `1px solid var(--dwo-color-border)`,
                 padding: '10px',
                 borderRadius: '6px',
                 fontSize: '13px',
@@ -281,7 +282,7 @@ export function WizardView({ onClose, onCreated }: WizardViewProps) {
               disabled={isCreating}
               style={{
                 flex: 1,
-                background: theme.colors.accent,
+                background: 'var(--dwo-color-accent)',
                 color: '#fff',
                 border: 'none',
                 padding: '10px',
@@ -301,12 +302,12 @@ export function WizardView({ onClose, onCreated }: WizardViewProps) {
   );
 }
 
-function labelStyle(theme: any): React.CSSProperties {
+function labelStyle(_theme: ThemeTokens): React.CSSProperties {
   return {
     display: 'block',
     fontSize: '12px',
     fontWeight: 500,
-    color: theme.colors.textMuted,
+    color: 'var(--dwo-color-text-muted)',
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
     marginBottom: '8px',

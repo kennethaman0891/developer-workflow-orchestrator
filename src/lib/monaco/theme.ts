@@ -198,7 +198,7 @@ function buildRules(t: ThemeTokens): editor.ITokenThemeRule[] {
 }
 
 function buildColors(t: ThemeTokens): editor.IColors {
-  const { bg, bgSecondary, bgTertiary, text, textMuted, accent, border, success, warning, error } =
+  const { bg, bgSecondary, bgTertiary, text, textMuted, accent, accentHover, border, success, warning, error } =
     t.colors;
 
   return {
@@ -299,7 +299,7 @@ function buildColors(t: ThemeTokens): editor.IColors {
     'dropdown.foreground': text,
     'button.background': accent,
     'button.foreground': '#ffffff',
-    'button.hoverBackground': t.colors.accentHover,
+    'button.hoverBackground': accentHover,
     'badge.background': accent,
     'badge.foreground': '#ffffff',
     'focusBorder': accent,

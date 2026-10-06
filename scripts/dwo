@@ -3,8 +3,9 @@
 #
 # Usage: dwo [path]
 #
-# Writes the current working directory to ~/.config/dwo/launch-cwd
-# so the DWO app can auto-fill projectPath for the workspace.
+# Writes the current working directory to the platform config dir's
+# dwo/launch-cwd (macOS: ~/Library/Application Support/dwo) so the DWO app can
+# auto-fill projectPath for the workspace.
 # If no path argument is given, uses $PWD.
 
 set -e
@@ -16,8 +17,16 @@ else
     TARGET_DIR="$PWD"
 fi
 
-# Ensure the config directory exists
-DWO_CONFIG_DIR="${HOME}/.config/dwo"
+# Ensure the config directory exists.
+# Must match `dirs::config_dir()/dwo` on the host (macOS: ~/Library/Application Support,
+# Linux: $XDG_CONFIG_HOME or ~/.config, Windows: %APPDATA%), otherwise the app never
+# sees the launch-cwd file.
+case "$(uname -s)" in
+  Darwin)            DWO_CONFIG_DIR="${HOME}/Library/Application Support/dwo" ;;
+  Linux)             DWO_CONFIG_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/dwo" ;;
+  MINGW*|MSYS*|CYGWIN*) DWO_CONFIG_DIR="${APPDATA}/dwo" ;;
+  *)                 DWO_CONFIG_DIR="${HOME}/.config/dwo" ;;
+esac
 mkdir -p "$DWO_CONFIG_DIR"
 
 # Write the launch-cwd file
@@ -27,18 +36,46 @@ echo "[dwo] Launching DWO in: $TARGET_DIR"
 
 # Find and launch the DWO binary
 # Check common install locations
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 DWO_BIN=""
 
-if [ -f "$HOME/Applications/DWO.app/Contents/MacOS/DWO" ]; then
-    DWO_BIN="$HOME/Applications/DWO.app/Contents/MacOS/DWO"
-elif [ -f "/Applications/DWO.app/Contents/MacOS/DWO" ]; then
-    DWO_BIN="/Applications/DWO.app/Contents/MacOS/DWO"
-elif command -v dwo &>/dev/null; then
-    DWO_BIN="dwo"
+find_dwo_app_bin() {
+    local app_path="$1"
+    if [ -f "$app_path/Contents/MacOS/dwo" ]; then
+        echo "$app_path/Contents/MacOS/dwo"
+    elif [ -f "$app_path/Contents/MacOS/DWO" ]; then
+        echo "$app_path/Contents/MacOS/DWO"
+    fi
+}
+
+# 1. Project target release build (if built locally)
+if [ -n "$REPO_DIR" ]; then
+    DWO_BIN="$(find_dwo_app_bin "$REPO_DIR/src-tauri/target/release/bundle/macos/DWO.app")"
+fi
+
+# 2. System Applications
+if [ -z "$DWO_BIN" ]; then
+    DWO_BIN="$(find_dwo_app_bin "/Applications/DWO.app")"
+fi
+
+# 3. User Applications
+if [ -z "$DWO_BIN" ]; then
+    DWO_BIN="$(find_dwo_app_bin "$HOME/Applications/DWO.app")"
+fi
+
+# 4. PATH fallback
+if [ -z "$DWO_BIN" ] && command -v dwo &>/dev/null; then
+    _resolved_dwo="$(command -v dwo)"
+    _self="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+    if [ "$_resolved_dwo" != "$_self" ]; then
+        DWO_BIN="$_resolved_dwo"
+    fi
 fi
 
 if [ -n "$DWO_BIN" ]; then
-    exec "$DWO_BIN" &
+    "$DWO_BIN" &
+    disown 2>/dev/null || true
+    echo "[dwo] DWO launched in the background (PID $!)."
 else
     echo "[dwo] Warning: DWO binary not found. The launch-cwd has been written."
     echo "[dwo] Start DWO manually and it will pick up: $TARGET_DIR"

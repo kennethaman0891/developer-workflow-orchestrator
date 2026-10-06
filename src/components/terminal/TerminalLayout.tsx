@@ -18,7 +18,6 @@ import { useTerminalLayout } from '@/hooks/useTerminalLayout';
 import { useAutoLaunch, type PaneDimensions } from '@/hooks/useAutoLaunch';
 import { getTerminalDims, waitForTerminalDims, forgetTerminalDims, msSinceInput } from '@/lib/terminalDims';
 import { useSettings } from '@/contexts/SettingsContext';
-import { useTheme } from '@/contexts/ThemeContext';
 import { TerminalPanel } from './TerminalPanel';
 
 enum LayoutMode {
@@ -238,16 +237,17 @@ export function TerminalLayout({
   // Real xterm font size — used for the auto-launch pre-resize estimate so
   // the PTY is sized with the same metrics the terminal actually fits with.
   const { fontSize } = useSettings();
-  // Terminal chrome follows the active theme instead of hardcoded dark values.
-  const { theme } = useTheme();
+  // Terminal chrome follows the active theme (via CSS variables) instead of
+  // hardcoded dark values. The `theme` token object is not destructured here
+  // because every color reference below resolves through `var(--dwo-*)`.
   const chrome = {
-    containerBg: theme.colors.bg,
-    toolbarBg: theme.colors.bgSecondary,
-    border: theme.colors.border,
-    accent: theme.colors.accent,
-    text: theme.colors.text,
-    textMuted: theme.colors.textMuted,
-    panelBg: theme.colors.bgTertiary,
+    containerBg: 'var(--dwo-color-bg)',
+    toolbarBg: 'var(--dwo-color-bg-secondary)',
+    border: 'var(--dwo-color-border)',
+    accent: 'var(--dwo-color-accent)',
+    text: 'var(--dwo-color-text)',
+    textMuted: 'var(--dwo-color-text-muted)',
+    panelBg: 'var(--dwo-color-bg-tertiary)',
   };
 
   const gridContainerRef = useRef<HTMLDivElement>(null);
@@ -385,11 +385,28 @@ export function TerminalLayout({
     syncPanels(sessions.map((s) => s.id));
   }, [sessions, syncPanels]);
 
+  // Auto-fallback to grid mode when panel count is not 2 but layout is split-h/split-v.
+  // This handles persisted layouts where user had 2 panels in split mode,
+  // then added/removed terminals making panel count != 2.
+  
+
   // Convert sessions array to Map for O(1) lookups by ID
   const sessionsMap = React.useMemo(() =>
     new Map(sessions.map(session => [session.id, session])),
     [sessions]
   );
+
+  // Filter panels to only those that actually exist in the current sessions
+  const validPanels = layoutLoaded ? layout.panels.filter((p) => sessionsMap.has(p.id)) : [];
+
+  // Auto-fallback to grid mode when panel count is not 2 but layout is split-h/split-v.
+  // This handles persisted layouts where user had 2 panels in split mode,
+  // then added/removed terminals making panel count != 2.
+  useEffect(() => {
+    if (layoutLoaded && validPanels.length < 2 && (layout.mode === LayoutMode.SPLIT_H || layout.mode === LayoutMode.SPLIT_V)) {
+      setMode(LayoutMode.GRID);
+    }
+  }, [layoutLoaded, validPanels.length, layout.mode, setMode]);
 
   // ── Create terminal helper ─────────────────────────────────────────────────
   const handleCreate = useCallback(() => {
@@ -443,10 +460,72 @@ export function TerminalLayout({
     [layout.mode],
   );
 
+  // Shared toolbar (mode buttons + terminal count). Rendered in EVERY state —
+  // including empty/restoring/syncing — so the layout controls never
+  // disappear when no terminal is currently present. The chosen mode is
+  // persisted and applies to the next terminal that is created.
+  // Split modes (side-by-side / stacked) only work with exactly 2 terminals.
+  const canSplit = validPanels.length >= 2;
+  const toolbar = (
+    <div
+      style={{
+        ...toolbarStyle,
+        background: chrome.toolbarBg,
+        borderBottom: `1px solid ${chrome.border}`,
+      }}
+    >
+      {maximizedId && (
+        <button
+          onClick={() => setMaximizedId(null)}
+          style={{
+            ...createBtnStyle,
+            background: chrome.panelBg,
+            color: chrome.text,
+            border: `1px solid ${chrome.border}`,
+            marginRight: '8px',
+          }}
+        >
+          ⤓ Restore
+        </button>
+      )}
+
+      <div style={{ ...modeGroupStyle, background: chrome.panelBg }}>
+        <button
+          onClick={() => setMode(LayoutMode.GRID)}
+          style={modeBtnStyle(layout.mode === LayoutMode.GRID, chrome.accent, chrome.textMuted)}
+          title="Grid layout"
+        >
+          <GridIcon />
+        </button>
+        <button
+          onClick={() => canSplit && setMode(LayoutMode.SPLIT_H)}
+          disabled={!canSplit}
+          style={modeBtnStyle(layout.mode === LayoutMode.SPLIT_H, chrome.accent, canSplit ? chrome.textMuted : chrome.border)}
+          title={canSplit ? "Side-by-side split" : "Requires at least 2 terminals"}
+        >
+          <SplitHIcon />
+        </button>
+        <button
+          onClick={() => canSplit && setMode(LayoutMode.SPLIT_V)}
+          disabled={!canSplit}
+          style={modeBtnStyle(layout.mode === LayoutMode.SPLIT_V, chrome.accent, canSplit ? chrome.textMuted : chrome.border)}
+          title={canSplit ? "Stacked split" : "Requires at least 2 terminals"}
+        >
+          <SplitVIcon />
+        </button>
+      </div>
+
+      <span style={{ ...countStyle, color: chrome.textMuted }}>
+        {(sessions?.length ?? 0)} terminal{(sessions?.length ?? 0) !== 1 ? 's' : ''}
+      </span>
+    </div>
+  );
+
   // ── Render: empty state ───────────────────────────────────────────────────
   if (!sessions || sessions.length === 0) {
     return (
       <div data-split-container="true" style={{ ...containerStyle, background: chrome.containerBg }}>
+        {toolbar}
         {backendError && (
           <div
             role="alert"
@@ -492,14 +571,12 @@ export function TerminalLayout({
     );
   }
 
-  // Filter panels to only those that actually exist in the current sessions
-  const validPanels = layoutLoaded ? layout.panels.filter((p) => sessionsMap.has(p.id)) : [];
-
   // Layout still restoring from storage — never flash a false empty state or
   // a half-built grid while sessions already exist.
   if (!layoutLoaded && sessions && sessions.length > 0) {
     return (
       <div data-split-container="true" style={{ ...containerStyle, background: chrome.containerBg }}>
+        {toolbar}
         <div style={emptyStyle}>
           <div style={{ color: chrome.textMuted, fontSize: '13px' }}>Restoring layout…</div>
         </div>
@@ -507,18 +584,14 @@ export function TerminalLayout({
     );
   }
 
-  // ── Render: split-h (exactly 2 panels side-by-side with draggable divider) ──
-  // Falls through to grid mode if a panel is maximized, or for 0, 1, or 3+ panels.
-  if (layout.mode === LayoutMode.SPLIT_H && validPanels.length === 2 && !maximizedId) {
-    const p1 = validPanels[0];
-    const p2 = validPanels[1];
-    const s1 = sessionsMap.get(p1.id);
-    const s2 = sessionsMap.get(p2.id);
-    // Sessions and panels raced (template creation, crash recovery): show a
-    // brief syncing state instead of a black rectangle.
-    if (!s1 || !s2) {
+  // ── Render: split-h (side-by-side split with horizontal scroll for 2+ panels) ──
+  // Shows all panels in a horizontal scrollable row with draggable divider between first two.
+  if (layout.mode === LayoutMode.SPLIT_H && validPanels.length >= 2 && !maximizedId) {
+    const sessions = validPanels.map(p => sessionsMap.get(p.id)).filter(Boolean) as SessionMeta[];
+    if (sessions.length < 2) {
       return (
         <div data-split-container="true" style={{ ...containerStyle, background: chrome.containerBg }}>
+          {toolbar}
           <div style={emptyStyle}>
             <div style={{ color: chrome.textMuted, fontSize: '13px' }}>Syncing terminals…</div>
           </div>
@@ -526,51 +599,95 @@ export function TerminalLayout({
       );
     }
 
+    // For 2 panels: show divider. For 3+: show all in single horizontal scroll.
+    const showDivider = sessions.length === 2;
+
     return (
-      <div data-split-container="true" style={{ ...containerStyle, flexDirection: 'row' }}>
-        <div style={{ width: `${splitPos * 100}%`, flex: 'none', display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
-          <TerminalPanel
-            id={s1.id}
-            title={s1.title}
-            visible={s1.visible}
-            isActive={s1.id === activeId}
-            isMaximized={false}
-            isTui={s1.is_tui}
-            onClose={() => handleClose(s1.id)}
-            onFocus={() => focusPanel(s1.id)}
-            onMaximize={() => handleMaximize(s1.id)}
-          />
-        </div>
-        <HDivider pos={splitPos} onPosChange={setSplitPos} />
-        <div style={{ width: `${(1 - splitPos) * 100}%`, flex: 'none', display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
-          <TerminalPanel
-            id={s2.id}
-            title={s2.title}
-            visible={s2.visible}
-            isActive={s2.id === activeId}
-            isMaximized={false}
-            isTui={s2.is_tui}
-            onClose={() => handleClose(s2.id)}
-            onFocus={() => focusPanel(s2.id)}
-            onMaximize={() => handleMaximize(s2.id)}
-          />
+      <div data-split-container="true" style={{ ...containerStyle, flexDirection: 'column', overflow: 'visible' }}>
+        {toolbar}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'row', minHeight: 0, overflow: 'visible' }}>
+          {showDivider ? (
+            // Exactly 2 panels: traditional split with divider
+            <>
+              <div style={{ width: `${splitPos * 100}%`, flex: 'none', display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+                <TerminalPanel
+                  id={sessions[0]!.id}
+                  title={sessions[0]!.title}
+                  visible={sessions[0]!.visible}
+                  isActive={sessions[0]!.id === activeId}
+                  isMaximized={false}
+                  isTui={sessions[0]!.is_tui}
+                  onClose={() => handleClose(sessions[0]!.id)}
+                  onFocus={() => focusPanel(sessions[0]!.id)}
+                  onMaximize={() => handleMaximize(sessions[0]!.id)}
+                />
+              </div>
+              <HDivider pos={splitPos} onPosChange={setSplitPos} />
+              <div style={{ width: `${(1 - splitPos) * 100}%`, flex: 'none', display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+                <TerminalPanel
+                  id={sessions[1]!.id}
+                  title={sessions[1]!.title}
+                  visible={sessions[1]!.visible}
+                  isActive={sessions[1]!.id === activeId}
+                  isMaximized={false}
+                  isTui={sessions[1]!.is_tui}
+                  onClose={() => handleClose(sessions[1]!.id)}
+                  onFocus={() => focusPanel(sessions[1]!.id)}
+                  onMaximize={() => handleMaximize(sessions[1]!.id)}
+                />
+              </div>
+            </>
+          ) : (
+            // 3+ panels: single horizontal scrollable row with all panels
+            <div
+              style={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'row',
+                gap: '6px',
+                padding: '6px',
+                overflow: 'auto',
+                minHeight: 0,
+                minWidth: 0,
+              }}
+            >
+              {sessions.map((s) => (
+                <div
+                  key={s.id}
+                  style={{
+                    flex: '1 1 300px',
+                    minWidth: '300px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <TerminalPanel
+                    id={s.id}
+                    title={s.title}
+                    visible={s.visible}
+                    isActive={s.id === activeId}
+                    isMaximized={false}
+                    isTui={s.is_tui}
+                    onClose={() => handleClose(s.id)}
+                    onFocus={() => focusPanel(s.id)}
+                    onMaximize={() => handleMaximize(s.id)}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     );
-  }
-
-  // ── Render: split-v (exactly 2 panels stacked with draggable divider) ───────
-  // Falls through to grid mode if a panel is maximized, or for 0, 1, or 3+ panels.
-  if (layout.mode === LayoutMode.SPLIT_V && validPanels.length === 2 && !maximizedId) {
-    const p1 = validPanels[0];
-    const p2 = validPanels[1];
-    const s1 = sessionsMap.get(p1.id);
-    const s2 = sessionsMap.get(p2.id);
-    // Sessions and panels raced (template creation, crash recovery): show a
-    // brief syncing state instead of a black rectangle.
-    if (!s1 || !s2) {
+  }// ── Render: split-v (stacked split with vertical scroll for 2+ panels) ──
+  // Shows all panels in a vertical scrollable column with draggable divider between first two.
+  if (layout.mode === LayoutMode.SPLIT_V && validPanels.length >= 2 && !maximizedId) {
+    const sessions = validPanels.map(p => sessionsMap.get(p.id)).filter(Boolean) as SessionMeta[];
+    if (sessions.length < 2) {
       return (
         <div data-split-container="true" style={{ ...containerStyle, background: chrome.containerBg }}>
+          {toolbar}
           <div style={emptyStyle}>
             <div style={{ color: chrome.textMuted, fontSize: '13px' }}>Syncing terminals…</div>
           </div>
@@ -578,40 +695,88 @@ export function TerminalLayout({
       );
     }
 
+    // For 2 panels: show divider. For 3+: show all in single vertical scroll.
+    const showDivider = sessions.length === 2;
+
     return (
-      <div data-split-container="true" style={{ ...containerStyle, flexDirection: 'column' }}>
-        <div style={{ height: `${splitPos * 100}%`, flex: 'none', display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
-          <TerminalPanel
-            id={s1.id}
-            title={s1.title}
-            visible={s1.visible}
-            isActive={s1.id === activeId}
-            isMaximized={false}
-            isTui={s1.is_tui}
-            onClose={() => handleClose(s1.id)}
-            onFocus={() => focusPanel(s1.id)}
-            onMaximize={() => handleMaximize(s1.id)}
-          />
-        </div>
-        <VDivider pos={splitPos} onPosChange={setSplitPos} />
-        <div style={{ height: `${(1 - splitPos) * 100}%`, flex: 'none', display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
-          <TerminalPanel
-            id={s2.id}
-            title={s2.title}
-            visible={s2.visible}
-            isActive={s2.id === activeId}
-            isMaximized={false}
-            isTui={s2.is_tui}
-            onClose={() => handleClose(s2.id)}
-            onFocus={() => focusPanel(s2.id)}
-            onMaximize={() => handleMaximize(s2.id)}
-          />
+      <div data-split-container="true" style={{ ...containerStyle, flexDirection: 'column', overflow: 'visible' }}>
+        {toolbar}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'visible' }}>
+          {showDivider ? (
+            // Exactly 2 panels: traditional split with divider
+            <>
+              <div style={{ height: `${splitPos * 100}%`, flex: 'none', display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
+                <TerminalPanel
+                  id={sessions[0]!.id}
+                  title={sessions[0]!.title}
+                  visible={sessions[0]!.visible}
+                  isActive={sessions[0]!.id === activeId}
+                  isMaximized={false}
+                  isTui={sessions[0]!.is_tui}
+                  onClose={() => handleClose(sessions[0]!.id)}
+                  onFocus={() => focusPanel(sessions[0]!.id)}
+                  onMaximize={() => handleMaximize(sessions[0]!.id)}
+                />
+              </div>
+              <VDivider pos={splitPos} onPosChange={setSplitPos} />
+              <div style={{ height: `${(1 - splitPos) * 100}%`, flex: 'none', display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: 0 }}>
+                <TerminalPanel
+                  id={sessions[1]!.id}
+                  title={sessions[1]!.title}
+                  visible={sessions[1]!.visible}
+                  isActive={sessions[1]!.id === activeId}
+                  isMaximized={false}
+                  isTui={sessions[1]!.is_tui}
+                  onClose={() => handleClose(sessions[1]!.id)}
+                  onFocus={() => focusPanel(sessions[1]!.id)}
+                  onMaximize={() => handleMaximize(sessions[1]!.id)}
+                />
+              </div>
+            </>
+          ) : (
+            // 3+ panels: single vertical scrollable column with all panels
+            <div
+              style={{
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '6px',
+                padding: '6px',
+                overflow: 'auto',
+                minWidth: 0,
+                minHeight: 0,
+              }}
+            >
+              {sessions.map((s) => (
+                <div
+                  key={s.id}
+                  style={{
+                    flex: '1 1 200px',
+                    minHeight: '200px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <TerminalPanel
+                    id={s.id}
+                    title={s.title}
+                    visible={s.visible}
+                    isActive={s.id === activeId}
+                    isMaximized={false}
+                    isTui={s.is_tui}
+                    onClose={() => handleClose(s.id)}
+                    onFocus={() => focusPanel(s.id)}
+                    onMaximize={() => handleMaximize(s.id)}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     );
-  }
-
-  // ── Render: grid mode ──────────────────────────────────────────────────────
+  }// ── Render: grid mode ──────────────────────────────────────────────────────
   // Calculate grid dimensions from ACTUAL panel positions and spans of valid sessions.
   const numPanels = validPanels.length;
   // If there's only 1 panel, ensure it is at (0,0) and spans (1,1) so it fills the workspace
@@ -636,60 +801,11 @@ export function TerminalLayout({
       data-split-container="true"
       style={{ ...containerStyle, background: chrome.containerBg }}
     >
-      {/* Toolbar */}
-      <div
-        style={{
-          ...toolbarStyle,
-          background: chrome.toolbarBg,
-          borderBottom: `1px solid ${chrome.border}`,
-        }}
-      >
-        {maximizedId && (
-          <button
-            onClick={() => setMaximizedId(null)}
-            style={{
-              ...createBtnStyle,
-              background: chrome.panelBg,
-              color: chrome.text,
-              border: `1px solid ${chrome.border}`,
-              marginRight: '8px',
-            }}
-          >
-            ⤓ Restore
-          </button>
-        )}
-
-        <div style={{ ...modeGroupStyle, background: chrome.panelBg }}>
-          <button
-            onClick={() => setMode(LayoutMode.GRID)}
-            style={modeBtnStyle(layout.mode === LayoutMode.GRID, chrome.accent, chrome.textMuted)}
-            title="Grid layout"
-          >
-            <GridIcon />
-          </button>
-          <button
-            onClick={() => setMode(LayoutMode.SPLIT_H)}
-            style={modeBtnStyle(layout.mode === LayoutMode.SPLIT_H, chrome.accent, chrome.textMuted)}
-            title="Side-by-side split"
-          >
-            <SplitHIcon />
-          </button>
-          <button
-            onClick={() => setMode(LayoutMode.SPLIT_V)}
-            style={modeBtnStyle(layout.mode === LayoutMode.SPLIT_V, chrome.accent, chrome.textMuted)}
-            title="Stacked split"
-          >
-            <SplitVIcon />
-          </button>
-        </div>
-
-        <span style={{ ...countStyle, color: chrome.textMuted }}>
-          {(sessions?.length ?? 0)} terminal{(sessions?.length ?? 0) !== 1 ? 's' : ''}
-        </span>
-      </div>
+      {/* Toolbar (shared — defined above so it survives every state) */}
+      {toolbar}
 
       {/* Grid */}
-      {layout.panels.length === 0 ? (
+      {validPanels.length === 0 ? (
         <div style={emptyStyle}>
           <div style={{ fontSize: '28px', marginBottom: '8px' }}>⌘</div>
           <div style={{ color: chrome.textMuted, fontSize: '14px' }}>No terminals yet</div>

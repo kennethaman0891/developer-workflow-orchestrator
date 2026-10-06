@@ -84,7 +84,19 @@ export async function wsLoad(): Promise<Workspace[]> {
   return invoke<Workspace[]>('list_workspaces');
 }
 
-export async function wsSave(state: any): Promise<void> {
+/**
+ * Mirror of the Rust `AppState` (src-tauri/src/state/state.rs). The struct
+ * has no `rename_all`, so wire field names stay snake_case — this matches
+ * Rust verbatim.
+ */
+export interface AppState {
+  workspaces: Workspace[];
+  active_workspace_id: string | null;
+  tier: string;
+  license_key: string | null;
+}
+
+export async function wsSave(state: AppState): Promise<void> {
   await invoke('save_workspace_state', { newState: state });
 }
 

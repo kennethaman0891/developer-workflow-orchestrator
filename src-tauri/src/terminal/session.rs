@@ -233,8 +233,16 @@ impl TerminalSession {
 /// gets stored in scrollback and replayed into fresh terminals or injected
 /// via handoff heredocs.
 fn sanitize_line(raw: &str) -> String {
+    // strip_ansi (v0.1) only strips CSI sequences (ESC [ …). The shell prompt
+    // emits OSC 133 sequences (ESC ] 133 ; … BEL / ST) for bracketed-paste
+    // mode and cursor-addressing. strip_ansi does NOT remove these, so they
+    // survive into the scrollback replay and, when xterm's cols shrink during
+    // a layout fit, corrupt the buffer (the OSC byte range interferes with
+    // xterm's line-wrapping of the replayed text). Strip OSC sequences too.
     let no_ansi = strip_ansi::strip_ansi(raw);
-    no_ansi
+    // OSC pattern: ESC ] ... (BEL  | ESC \ | BEL)
+    let no_osc = regex::Regex::new(r"\x1b\].*?(\x07|\x1b\\)").unwrap().replace_all(&no_ansi, "").to_string();
+    no_osc
         .chars()
         .filter(|&c| c == '\t' || (c >= ' ' && c <= '~') || (c as u32) > 0x7F)
         .collect()

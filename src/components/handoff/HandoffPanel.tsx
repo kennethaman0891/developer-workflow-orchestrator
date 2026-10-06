@@ -80,8 +80,11 @@ function HandoffTargetPicker({
             ? 'Target is a TUI session — pick a plain shell terminal'
             : `Inject into ${target?.title ?? 'terminal'}`
         }
-        className="dwo-handoff-inject"
         style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
           background: disabled ? '#4a9eff66' : targetIsTui ? '#333' : '#4a9eff22',
           border: targetIsTui ? '1px solid #2a2a2a' : '1px solid #4a9eff44',
           color: targetIsTui ? '#555' : '#4a9eff',
@@ -114,7 +117,6 @@ export function HandoffPanel({ sessions, activeId, onClose }: HandoffPanelProps)
   const primaryTarget = activeId || sessions[0]?.id || '';
 
   // Web mode has no PTY backend — hide the panel content gracefully.
-  if (!isTauri()) return null;
 
   const handleCapture = useCallback(async () => {
     if (!activeId) return;
@@ -163,6 +165,7 @@ export function HandoffPanel({ sessions, activeId, onClose }: HandoffPanelProps)
     }
   }, [getArtifact, showView, setSelected]);
 
+  if (!isTauri()) return null;
   return (
     <div style={{
       position: 'fixed',
@@ -192,16 +195,13 @@ export function HandoffPanel({ sessions, activeId, onClose }: HandoffPanelProps)
         <button
           onClick={onClose}
           title="Close handoff panel"
-          className="dwo-icon-btn dwo-close-btn"
-          style={{
-            background: 'transparent',
+          style={{ transition: 'background 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s, color 0.15s', background: 'transparent',
             border: 'none',
             color: '#888',
             cursor: 'pointer',
             fontSize: '16px',
             padding: '2px 4px',
-            borderRadius: '3px',
-          }}
+            borderRadius: '3px', }}
         >
           ✕
         </button>

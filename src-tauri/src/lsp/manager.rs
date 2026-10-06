@@ -105,6 +105,17 @@ pub struct ServerCandidate {
     pub program: String,
     /// Arguments; `--stdio` for servers that do not default to stdio.
     pub args: Vec<String>,
+    /// Whether the program may be resolved from the opened project's
+    /// `node_modules/.bin` directory.
+    ///
+    /// Node-based servers are frequently installed per project, so for
+    /// those candidates we prefer a project-local install. Every *other*
+    /// server (rust-analyzer, gopls, clangd, ...) must come from `PATH`
+    /// or an absolute path only: executing a `node_modules/.bin` shim of an
+    /// arbitrary name out of a user-opened project would let a malicious
+    /// project plant a script under a native server's name and have it
+    /// spawned by DWO.
+    pub local_bin_eligible: bool,
 }
 
 impl ServerCandidate {
@@ -112,12 +123,16 @@ impl ServerCandidate {
         Self {
             program: program.to_string(),
             args: args.iter().map(|a| a.to_string()).collect(),
+            local_bin_eligible: false,
         }
     }
 }
 
 fn node(program: &str, args: &[&str]) -> Vec<ServerCandidate> {
-    vec![ServerCandidate::new(program, args)]
+    vec![ServerCandidate {
+        local_bin_eligible: true,
+        ..ServerCandidate::new(program, args)
+    }]
 }
 
 /// Map a Monaco language id to the language servers worth attempting, most
@@ -172,9 +187,14 @@ pub fn candidates_for_language(language: &str) -> Vec<ServerCandidate> {
 /// Ordered concrete executables to try for a candidate: a project-local
 /// `node_modules/.bin` shim first (node servers are frequently installed per
 /// project), then the `PATH` lookup.
+///
+/// The project-local lookup is only attempted for node-based candidates
+/// (`local_bin_eligible`); for everything else the binary must resolve via
+/// `PATH` (or be an absolute path), so a hostile project can't shadow a
+/// native server with a planted `node_modules/.bin` script.
 fn executable_variants(cwd: &Path, candidate: &ServerCandidate) -> Vec<ServerCandidate> {
     let mut out = Vec::new();
-    if !candidate.program.contains(std::path::MAIN_SEPARATOR) {
+    if candidate.local_bin_eligible && !candidate.program.contains(std::path::MAIN_SEPARATOR) {
         let local = cwd
             .join("node_modules")
             .join(".bin")
@@ -183,6 +203,7 @@ fn executable_variants(cwd: &Path, candidate: &ServerCandidate) -> Vec<ServerCan
             out.push(ServerCandidate {
                 program: local.to_string_lossy().into_owned(),
                 args: candidate.args.clone(),
+                local_bin_eligible: candidate.local_bin_eligible,
             });
         }
     }

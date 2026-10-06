@@ -90,6 +90,161 @@ pub fn run() {
             let handoff_manager = handoff::HandoffManager::new(handoff_data_dir);
             app.manage(handoff_manager);
 
+            // ── Webview probe (DWO_WEBVIEW_PROBE=1) ─────────────────────────
+            // Inspects the real WKWebView: page URL, DOM state, live Tauri IPC
+            // round-trip, and any uncaught errors. Reports through the existing
+            // `frontend_error` command -> ~/Library/Application Support/dwo/rust-panics.log.
+            // While running, it also polls /tmp/dwo-probe-cmd.js every 3s; when the
+            // file content changes, the new content is evaluated in the page. The
+            // command content can call __probe_report(obj) to ship a result back.
+            // Gated by env var: no-op in normal launches. TEMP for release diagnosis.
+            if std::env::var_os("DWO_WEBVIEW_PROBE").is_some() {
+                let probe_handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    use std::time::Duration;
+                    const BOOT_JS: &str = r#"(() => {
+  const report = (s) => {
+    try {
+      if (window.__TAURI_INTERNALS__) {
+        window.__TAURI_INTERNALS__.invoke('frontend_error', { message: s });
+      }
+    } catch (e) {}
+  };
+  window.__probe_report = (o) => {
+    try { report('[dwo-probe-cmd] ' + JSON.stringify(o)); } catch (e) {}
+  };
+  if (!window.__probeInstalled) {
+    window.__probeInstalled = true;
+    let n = 0;
+    window.addEventListener('error', (e) => {
+      if (n++ < 20) report('[dwo-probe-err] UNCAUGHT ' + e.message + ' @' + (e.filename||'') + ':' + e.lineno + ':' + e.colno);
+    }, true);
+    window.addEventListener('unhandledrejection', (e) => {
+      if (n++ < 20) report('[dwo-probe-err] REJECTION ' + String((e.reason && e.reason.message) || e.reason));
+    });
+  }
+  const snap = (tag, extra) => {
+    const o = Object.assign({
+      tag: tag,
+      href: location.href,
+      title: document.title,
+      els: document.querySelectorAll('*').length,
+      body: ((document.body && document.body.innerText) || '').replace(/\s+/g, ' ').slice(0, 300),
+      internals: typeof window.__TAURI_INTERNALS__ !== 'undefined',
+    }, extra || {});
+    report('[dwo-webview-probe] ' + JSON.stringify(o));
+  };
+  const run = async () => {
+    let ipc = 'no-internal';
+    if (typeof window.__TAURI_INTERNALS__ !== 'undefined') {
+      try { ipc = 'ok:' + await window.__TAURI_INTERNALS__.invoke('get_home'); }
+      catch (e) { ipc = 'err:' + String((e && e.message) || e); }
+    }
+    snap('boot', { ipc: ipc });
+    setTimeout(() => snap('later'), 10000);
+  };
+  run().catch(() => {});
+})()"#;
+                    let mut last_cmd = String::new();
+                    let mut booted = false;
+                    for i in 0..2400 { // ~2h, then stop
+                        std::thread::sleep(Duration::from_secs(3));
+                        let Some(win) = probe_handle.get_webview_window("main") else { continue };
+                        let url_s = win.url().ok().map(|u| u.to_string()).unwrap_or_default();
+                        if !booted {
+                            booted = true;
+                            eprintln!("[DWO probe] main url = {} (focusing)", url_s);
+                            let _ = win.set_focus();
+                            let _ = win.eval(BOOT_JS);
+                            eprintln!("[DWO probe] webview probe installed");
+                        }
+                        if let Ok(cmd) = std::fs::read_to_string("/tmp/dwo-probe-cmd.js") {
+                            if cmd.trim() != last_cmd.trim() {
+                                let wrapped = format!(
+                                    "(() => {{ try {{ {} }} catch (e) {{ window.__probe_report && window.__probe_report({{err: String(e && e.stack || e), at: location.href}}); }} }})();",
+                                    cmd.trim()
+                                );
+                                eprintln!("[DWO probe] eval cmd: {}", cmd.trim().chars().take(80).collect::<String>());
+                                let _ = win.eval(&wrapped);
+                                last_cmd = cmd;
+                            }
+                        }
+                        if i == 2399 {
+                            eprintln!("[DWO probe] main url now = {}", url_s);
+                        }
+                    }
+                });
+            }
+
+            // ── Dev-only: dev-server watchdog ──────────────────────────────────
+            // Tauri's "wait for your frontend dev server" gate only checks that
+            // the port is accepting TCP connections. If `devUrl` is not
+            // actually serving when the window opens (cold start race, or the
+            // dev server died mid-session), WKWebView fails the load once and
+            // never retries — the user is left with a dead page. Poll the
+            // port in the background and re-issue the navigation each time the
+            // server transitions from unreachable back to reachable, so the
+            // window self-heals.
+            #[cfg(dev)]
+            if let Some(dev_url) = app.config().build.dev_url.clone() {
+                let host = dev_url.host_str().unwrap_or("localhost").to_string();
+                let port = dev_url.port_or_known_default().unwrap_or(3000);
+                use std::net::ToSocketAddrs;
+                let addrs: std::vec::Vec<std::net::SocketAddr> =
+                    (host.as_str(), port)
+                        .to_socket_addrs()
+                        .map(|iter| iter.collect())
+                        .unwrap_or_default();
+                if !addrs.is_empty() {
+                    let handle = app.handle().clone();
+                    let url_for_eval = dev_url.to_string();
+                    tauri::async_runtime::spawn(async move {
+                        use std::time::Duration;
+                        let mut down = false;
+                        loop {
+                            let reachable = addrs
+                                .iter()
+                                .any(|addr| {
+                                    std::net::TcpStream::connect_timeout(
+                                        addr,
+                                        Duration::from_millis(500),
+                                    )
+                                    .is_ok()
+                                });
+                            if reachable {
+                                if down {
+                                    eprintln!(
+                                        "[DWO dev] dev server {} is back — reloading the main window",
+                                        url_for_eval
+                                    );
+                                    if let Some(win) = handle.get_webview_window("main") {
+                                        let js = format!(
+                                            "window.location.replace({:?});",
+                                            url_for_eval
+                                        );
+                                        let _ = win.eval(js);
+                                    } else {
+                                        eprintln!("[DWO dev] main window not found; could not reload the dev server URL");
+                                    }
+                                }
+                                down = false;
+                            } else {
+                                if !down {
+                                    eprintln!(
+                                        "[DWO dev] dev server {} unreachable — the window will reload once the dev server is back",
+                                        url_for_eval
+                                    );
+                                }
+                                down = true;
+                            }
+                            tokio::time::sleep(Duration::from_secs(2)).await;
+                        }
+                    });
+                } else {
+                    eprintln!("[DWO dev] watchdog: could not resolve the host of devUrl {dev_url:?}");
+                }
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

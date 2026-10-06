@@ -7,7 +7,7 @@
  * This provides the TRUE Seti UI icon shapes and colors, not approximations.
  */
 
-import { getIcon, themeIcons } from 'seti-file-icons';
+import { themeIcons } from 'seti-file-icons';
 import type { ReactNode } from 'react';
 
 // ── Seti UI Color Theme (from jesseweed/seti-ui) ─────────────────────────────

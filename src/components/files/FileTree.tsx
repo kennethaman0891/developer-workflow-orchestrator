@@ -72,7 +72,7 @@ export function FileTree({ onFileSelect }: FileTreeProps) {
 
   if (loading) {
     return (
-      <div style={{ padding: '8px', color: theme.colors.textMuted, fontSize: '12px' }}>
+      <div style={{ padding: '8px', color: 'var(--dwo-color-text-muted)', fontSize: '12px' }}>
         Loading...
       </div>
     );
@@ -84,8 +84,8 @@ export function FileTree({ onFileSelect }: FileTreeProps) {
       <div style={{
         padding: '8px',
         fontSize: '11px',
-        color: theme.colors.textMuted,
-        borderBottom: `1px solid ${theme.colors.border}`,
+        color: 'var(--dwo-color-text-muted)',
+        borderBottom: `1px solid ${'var(--dwo-color-border)'}`,
         fontFamily: 'monospace',
       }}>
         {currentPath}
@@ -95,8 +95,8 @@ export function FileTree({ onFileSelect }: FileTreeProps) {
       <div style={{
         padding: '4px 8px',
         fontSize: '10px',
-        color: theme.colors.textMuted,
-        borderBottom: `1px solid ${theme.colors.border}`,
+        color: 'var(--dwo-color-text-muted)',
+        borderBottom: `1px solid ${'var(--dwo-color-border)'}`,
         fontStyle: 'italic',
       }}>
         Click a file to open • Click a folder to navigate
@@ -105,7 +105,7 @@ export function FileTree({ onFileSelect }: FileTreeProps) {
       {/* Create button */}
       <div style={{
         padding: '4px 8px',
-        borderBottom: `1px solid ${theme.colors.border}`,
+        borderBottom: `1px solid ${'var(--dwo-color-border)'}`,
         display: 'flex',
         gap: '4px',
       }}>
@@ -133,9 +133,9 @@ export function FileTree({ onFileSelect }: FileTreeProps) {
             placeholder={createType === 'file' ? 'filename.txt' : 'foldername'}
             style={{
               flex: 1,
-              background: theme.colors.bg,
-              border: `1px solid ${theme.colors.border}`,
-              color: theme.colors.text,
+              background: 'var(--dwo-color-bg)',
+              border: `1px solid ${'var(--dwo-color-border)'}`,
+              color: 'var(--dwo-color-text)',
               padding: '2px 6px',
               borderRadius: '3px',
               fontSize: '11px',
@@ -151,7 +151,7 @@ export function FileTree({ onFileSelect }: FileTreeProps) {
       {/* File list */}
       <div style={{ overflow: 'auto', maxHeight: '300px' }}>
         {entries.length === 0 ? (
-          <div style={{ padding: '12px', textAlign: 'center', color: theme.colors.textMuted, fontSize: '11px' }}>
+          <div style={{ padding: '12px', textAlign: 'center', color: 'var(--dwo-color-text-muted)', fontSize: '11px' }}>
             Empty directory
           </div>
         ) : (
@@ -166,13 +166,13 @@ export function FileTree({ onFileSelect }: FileTreeProps) {
                 padding: '3px 8px',
                 cursor: 'pointer',
                 fontSize: '11px',
-                color: entry.is_dir ? theme.colors.accent : theme.colors.text,
-                background: selectedPath === entry.path ? theme.colors.bgTertiary : 'transparent',
+                color: entry.is_dir ? 'var(--dwo-color-accent)' : 'var(--dwo-color-text)',
+                background: selectedPath === entry.path ? 'var(--dwo-color-bg-tertiary)' : 'transparent',
                 transition: 'background 0.1s',
               }}
               onMouseEnter={e => {
                 if (selectedPath !== entry.path) {
-                  e.currentTarget.style.background = theme.colors.bgTertiary;
+                  e.currentTarget.style.background = 'var(--dwo-color-bg-tertiary)';
                 }
               }}
               onMouseLeave={e => {

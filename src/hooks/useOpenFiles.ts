@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
-import { listFiles, readFile, writeFile, type FsEntry } from '@/lib/api';
+import { useState, useCallback } from 'react';
+import { readFile, writeFile } from '@/lib/api';
 
 export interface OpenFile {
   path: string;
@@ -33,7 +33,6 @@ export function useOpenFiles(): UseOpenFilesReturn {
   const [openFiles, setOpenFiles] = useState<Map<string, OpenFile>>(new Map());
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
-  const saveTimeoutRef = useRef<Record<string, NodeJS.Timeout>>({});
 
   /** Add a file to the open files map */
   const addFile = useCallback(
