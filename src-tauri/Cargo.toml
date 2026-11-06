@@ -40,6 +40,11 @@ notify = "6"
 strip-ansi = "0.1"
 objc2 = { version = "0.6", features = ["exception"] }
 
+# Security
+chacha20poly1305 = "0.10"
+validator = { version = "0.18", features = ["derive"] }
+url = "2"
+
 # DWO patch: tao 0.35.3 crashes on macOS 26 (Tahoe) at launch — an NSException
 # inside applicationDidFinishLaunching unwinds through the extern "C" delegate
 # and aborts (tauri-apps/tao#1171). Vendored copy catches the exception and uses

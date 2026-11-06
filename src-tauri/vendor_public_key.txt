@@ -1,0 +1,4 @@
+# Ed25519 vendor public key (base64-encoded 32 bytes)
+# Generate with: openssl genpkey -algorithm ed25519 -out private.key
+# Then: openssl pkey -in private.key -pubout -outform DER | base64
+# Place the base64 output here for production builds

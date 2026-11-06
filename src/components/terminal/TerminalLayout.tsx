@@ -464,7 +464,8 @@ export function TerminalLayout({
   // including empty/restoring/syncing — so the layout controls never
   // disappear when no terminal is currently present. The chosen mode is
   // persisted and applies to the next terminal that is created.
-  // Split modes (side-by-side / stacked) only work with exactly 2 terminals.
+  // Split modes (side-by-side / stacked) work with 2+ terminals:
+  // 2 panels use a draggable divider; 3+ share a scrollable row/column.
   const canSplit = validPanels.length >= 2;
   const toolbar = (
     <div
@@ -655,8 +656,10 @@ export function TerminalLayout({
                 <div
                   key={s.id}
                   style={{
-                    flex: '1 1 300px',
-                    minWidth: '300px',
+                    // Equal share of the available width; cards only start
+                    // scrolling horizontally when N × min-width can't fit.
+                    flex: '1 1 0',
+                    minWidth: '280px',
                     display: 'flex',
                     flexDirection: 'column',
                     overflow: 'hidden',
@@ -751,8 +754,10 @@ export function TerminalLayout({
                 <div
                   key={s.id}
                   style={{
-                    flex: '1 1 200px',
-                    minHeight: '200px',
+                    // Equal share of the available height; cards only start
+                    // scrolling vertically when N × min-height can't fit.
+                    flex: '1 1 0',
+                    minHeight: '180px',
                     display: 'flex',
                     flexDirection: 'column',
                     overflow: 'hidden',

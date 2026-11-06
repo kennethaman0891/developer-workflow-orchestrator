@@ -19,6 +19,7 @@ pub mod diagnostics;
 pub mod workspace;
 pub mod lsp;
 pub mod handoff;
+pub mod security;
 
 use std::path::PathBuf;
 use std::fs::File;
@@ -89,6 +90,9 @@ pub fn run() {
                 .unwrap_or_else(|| std::path::PathBuf::from("/tmp/dwo/handoffs"));
             let handoff_manager = handoff::HandoffManager::new(handoff_data_dir);
             app.manage(handoff_manager);
+
+            // Initialize security subsystem
+            security::init_security(app)?;
 
             // ── Webview probe (DWO_WEBVIEW_PROBE=1) ─────────────────────────
             // Inspects the real WKWebView: page URL, DOM state, live Tauri IPC

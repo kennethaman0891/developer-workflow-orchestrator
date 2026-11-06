@@ -2,7 +2,9 @@
 //!
 //! Tauri command handlers for license management.
 
-use super::super::license::license::LicenseManager;
+use super::super::license::license::{LicenseManager, Tier};
+use crate::security::audit;
+use crate::security::validation::validate_string;
 
 /// Activate a license
 #[tauri::command]
@@ -37,5 +39,34 @@ pub async fn deactivate(
     state: tauri::State<'_, LicenseManager>,
 ) -> Result<bool, String> {
     let mut lm = state.inner().clone();
-    Ok(lm.deactivate("default"))
+    let result = lm.deactivate("default");
+
+    // Audit log
+    if let Some(logger) = audit::audit_logger() {
+        let event_type = if result {
+            audit::AuditEventType::LicenseDeactivated
+        } else {
+            audit::AuditEventType::LicenseValidationFailure
+        };
+        logger.log(
+            event_type,
+            audit::Severity::Info,
+            None,
+            None,
+            Some("default".to_string()),
+            serde_json::json!({"success": result}),
+        );
+    }
+
+    Ok(result)
+}
+
+
+/// Check current license status
+#[tauri::command]
+pub async fn check_status(
+    state: tauri::State<'_, LicenseManager>,
+) -> Result<Tier, String> {
+    let lm = state.inner().clone();
+    Ok(lm.get_tier("default"))
 }

@@ -27,22 +27,6 @@ interface TerminalAnchorProps {
  * xterm exposes no public API for cancelling its internal animation frames,
  * so we narrow-cast into these fields behind the existing try/catch guards.
  */
-/**
- * Strip OSC (Operating System Command) escape sequences from raw PTY output
- * before writing to xterm.
- *
- * xterm's DOM renderer corrupts its buffer rows when OSC sequences (e.g.
- * ESC ] 133 ; C BEL from the shell prompt's bracketed-paste markers) are
- * written while the terminal is being resized by fitAddon.fit(). The OSC
- * bytes interfere with xterm's internal line-wrapping at the new column
- * count, producing garbled textContent in `.xterm-rows` (e.g.
- * "eecho VIS_MARK]133;CVIS_MARK"). xterm renders prompts correctly without
- * these sequences — the user-visible prompt text is unaffected.
- */
-const OSC_RE = /\x1b\].*?(\x07|\x1b\\)/g;
-function stripOsc(data: string): string {
-  return data.replace(OSC_RE, '');
-}
 
 interface XTermPrivateCore {
   viewport?: { _refreshAnimationFrame?: number | null };
@@ -65,6 +49,9 @@ export function TerminalAnchor({ sessionId, className = '', isTui = false }: Ter
   sessionIdRef.current = sessionId;
   const isTuiRef = useRef(isTui);
   isTuiRef.current = isTui;
+  // Detects a live TUI's alternate screen (?1049h/?1047h on, ?1049l/?1047l off)
+  // so scrollback replay never clobbers a running vim/zellij/htop screen.
+  const altScreenRef = useRef(false);
   // Resize dedup: send terminal_resize only when the fitted cols/rows change,
   // collapsing the mount-time storm (init fit + fonts-ready + retry-fit +
   // ResizeObserver) into one real resize per distinct size.
@@ -286,65 +273,38 @@ export function TerminalAnchor({ sessionId, className = '', isTui = false }: Ter
             // Safety: only fit if container has non-zero dimensions
             const rect = containerRef.current?.getBoundingClientRect();
             if (rect && rect.width > 0 && rect.height > 0) {
-              // Proactive anti-corruption: xterm's internal _reflowSmaller
-              // (invoked by terminal.resize() inside fitAddon.fit()) corrupts
-              // buffer lines when cols shrink — any residual OSC bytes in the
-              // active xterm buffer cause byte-level garbling during reflow
-              // (e.g. "echo" → "eecho"). We PREVENT it rather than recover:
-              // (1) suspend live output writes, (2) reset xterm buffer so
-              // _reflowSmaller has zero lines to corrupt, (3) fit at the new
-              // col count, (4) re-emit sanitized scrollback, (5) resume writes
-              // and send resize to PTY ONLY after replay completes — this
-              // prevents the shell's fresh prompt from landing mid-reflow.
+              // xterm.js natively reflows the existing cell grid when it fits
+              // a new col/row size — colors, attributes, and a running TUI's
+              // alt-screen state are all preserved. The previous
+              // reset()+plain-text-replay approach wiped the live screen on
+              // EVERY resize, which is why CLIs/TUIs lost their UI here and
+              // colors never came back.
+              //
+              // We still (1) suspend live writes for the resize window and
+              // (2) defer the PTY resize to a macrotask AFTER the fit, so the
+              // shell/TUI repaints at the NEW width instead of interleaving a
+              // fresh prompt mid-reflow (the original "eecho" corruption).
+              // The reflow itself is safe now: live output passes through
+              // unstripped, so no broken escape residue is left in the grid.
               isResizingRef.current = true;
-              if (termRef.current && !disposedRef.current) {
-                termRef.current.reset();
-              }
               fitAddon.fit();
-              if (termRef.current && sessionIdRef.current && !disposedRef.current) {
-                invoke<string[]>('terminal_get_scrollback', { id: sessionIdRef.current })
-                  .then((lines) => {
-                    if (disposedRef.current || !termRef.current) return;
-                    const replay = lines.length > 0 ? lines.join('\r\n') + '\r\n' : '';
-                    writeChain = writeChain.then(() => {
-                      if (disposedRef.current || !termRef.current) {
-                        isResizingRef.current = false;
-                        return;
-                      }
-                      if (replay) {
-                        const cols = termRef.current.cols;
-                        // Trim each line to the current col count to prevent
-                        // xterm's parser from wrapping (which corrupts buffer
-                        // lines as "eecho" when cols shrink). With windowsMode
-                        // disabled reflow, lines wider than cols stay intact,
-                        // but the parser still wraps them on write — trimming
-                        // avoids that entirely.
-                        for (const line of lines) {
-                          const clean = stripOsc(line);
-                          const trimmed = clean.length > cols ? clean.slice(0, cols) : clean;
-                          termRef.current.writeln(trimmed);
-                        }
-                        termRef.current.writeln('');
-                      }
-                      // Resume live writes + publish new col/row to PTY.
-                      // Delayed until AFTER replay so the shell's prompt
-                      // doesn't race the reset+replay sequence.
-                      isResizingRef.current = false;
-                      // Defer sendResize by one macrotask so the xterm write
-                      // queue fully drains before the shell emits its fresh
-                      // prompt — this prevents parser-level interleaving.
-                      setTimeout(() => {
-                        if (termRef.current && !disposedRef.current && !isResizingRef.current) {
-                          reportTerminalDims(sessionIdRef.current ?? '', termRef.current.cols, termRef.current.rows);
-                          sendResize(sessionIdRef.current, termRef.current.cols, termRef.current.rows);
-                        }
-                      }, 0);
-                    });
-                  })
-                  .catch(() => { isResizingRef.current = false; });
-              } else {
+              setTimeout(() => {
+                if (disposedRef.current) {
+                  isResizingRef.current = false;
+                  return;
+                }
+                // Resume live writes before the PTY resize so the shell's
+                // fresh prompt (emitted in response to SIGWINCH) is not
+                // dropped by the guard.
                 isResizingRef.current = false;
-              }
+                const cols = termRef.current?.cols ?? 0;
+                const rows = termRef.current?.rows ?? 0;
+                const sid = sessionIdRef.current;
+                if (sid && cols > 0 && rows > 0) {
+                  reportTerminalDims(sid, cols, rows);
+                  sendResize(sid, cols, rows);
+                }
+              }, 0);
             }
           }
         });
@@ -398,13 +358,24 @@ export function TerminalAnchor({ sessionId, className = '', isTui = false }: Ter
 
       listen<{ session_id: string; data: string }>('terminal-output', (event) => {
         if (disposedRef.current || event.payload.session_id !== sessionId) return;
+        // Track alt-screen state so we know when a TUI is actively running.
+        if (/\x1b\[\?1049h|\x1b\[\?1047h/.test(event.payload.data)) altScreenRef.current = true;
+        else if (/\x1b\[\?1049l|\x1b\[\?1047l/.test(event.payload.data)) altScreenRef.current = false;
         if (isResizingRef.current) return;
         if (awaitingSnapshot) {
           pendingEvents.push(event.payload.data);
           return;
         }
+        // Write the RAW byte stream. xterm.js fully parses OSC sequences into
+        // cell state — palette OSC 4, fg/bg OSC 10/11, cursor OSC 12 — which
+        // is exactly what CLIs/TUIs use for their colors. The previous
+        // stripOsc() pass removed those sequences and, worse, truncated
+        // escape sequences that straddled chunk boundaries; the resulting
+        // residual escape bytes are what garbled the buffer on reflow
+        // ("echo" → "eecho"). Full passthrough keeps colors intact and
+        // leaves no broken escape residue in the grid.
         writeChain = writeChain.then(() => {
-          if (!disposedRef.current) term.write(stripOsc(event.payload.data));
+          if (!disposedRef.current) term.write(event.payload.data);
         });
       })
         .then((unlisten) => {
@@ -419,37 +390,42 @@ export function TerminalAnchor({ sessionId, className = '', isTui = false }: Ter
             awaitingSnapshot = false;
             const tail = pendingEvents.join('');
             pendingEvents.length = 0;
-            const replay = lines.length > 0 ? lines.join('\r\n') + '\r\n' : '';
-            if (disposedRef.current || (!replay && !tail)) return;
+            // Lines arrive already ANSI-sanitized from the Rust backend, so
+            // no client-side OSC stripping is needed. Skip replay entirely
+            // when a TUI owns the alt-screen — replaying plain text would
+            // clobber its live UI.
+            const hasReplay = !altScreenRef.current && lines.length > 0;
             writeChain = writeChain.then(() => {
               if (disposedRef.current) return;
-              if (replay) {
+              if (hasReplay) {
                 const cols = term?.cols ?? 80;
                 for (const line of lines) {
-                  const clean = stripOsc(line);
-                  const trimmed = clean.length > cols ? clean.slice(0, cols) : clean;
+                  const trimmed = line.length > cols ? line.slice(0, cols) : line;
                   term.writeln(trimmed);
                 }
                 term.writeln('');
               }
-              if (tail) term.write(stripOsc(tail));
-              // Initial replay complete: release the resize guard and publish
-              // dims so the shell can render a fresh prompt at the correct
-              // column count. Doing this AFTER replay prevents prompt output
-              // from interleaving with scrollback replay (the "eecho" corruption).
+              if (tail) term.write(tail);
+              // Release the resize guard and publish dims on EVERY resolution
+              // path — including the "no scrollback yet and nothing buffered"
+              // case of a freshly-created terminal. The previous early-return
+              // here left the guard set, which made the terminal-output
+              // listener drop all later output: the shell prompt never
+              // appeared and the terminal stayed blank ("no command line").
               isResizingRef.current = false;
               publishDims(term.cols, term.rows);
             });
           })
           .catch(() => {
             // Snapshot failed — flush whatever buffered in the meantime;
-            // the live stream continues from here on.
+            // the live stream continues from here on. The guard is still
+            // released so a failed fetch can never hold output hostage.
             awaitingSnapshot = false;
             const tail = pendingEvents.join('');
             pendingEvents.length = 0;
-            if (!tail || disposedRef.current) return;
             writeChain = writeChain.then(() => {
-              if (!disposedRef.current) term.write(stripOsc(tail));
+              if (disposedRef.current) return;
+              if (tail) term.write(tail);
               isResizingRef.current = false;
               publishDims(term?.cols ?? 0, term?.rows ?? 0);
             });

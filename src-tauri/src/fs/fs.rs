@@ -11,6 +11,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use crate::fs::ignore::{self, IgnoreRules};
+use crate::security::path::{validate_path, is_path_safe};
 
 /// A file or directory entry
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -24,7 +25,9 @@ pub struct FsEntry {
 
 /// List directory contents
 pub fn list_dir(path: &str) -> Result<Vec<FsEntry>, String> {
-    let path = Path::new(path);
+    // Validate path containment
+    let validated_path = validate_path(path)?;
+    let path = validated_path.as_path();
 
     if !path.exists() {
         return Err(format!("Path does not exist: {}", path.display()));
@@ -70,7 +73,9 @@ pub fn list_dir(path: &str) -> Result<Vec<FsEntry>, String> {
 
 /// Read file contents
 pub fn read_file(path: &str) -> Result<String, String> {
-    let path = Path::new(path);
+    // Validate path containment
+    let validated_path = validate_path(path)?;
+    let path = validated_path.as_path();
 
     if !path.exists() {
         return Err(format!("File does not exist: {}", path.display()));
@@ -85,7 +90,9 @@ pub fn read_file(path: &str) -> Result<String, String> {
 
 /// Write file contents
 pub fn write_file(path: &str, content: &str) -> Result<(), String> {
-    let path = Path::new(path);
+    // Validate path containment
+    let validated_path = validate_path(path)?;
+    let path = validated_path.as_path();
 
     // Ensure parent directory exists
     if let Some(parent) = path.parent() {
@@ -97,7 +104,9 @@ pub fn write_file(path: &str, content: &str) -> Result<(), String> {
 
 /// Create a new file
 pub fn create_file(path: &str) -> Result<(), String> {
-    let path = Path::new(path);
+    // Validate path containment
+    let validated_path = validate_path(path)?;
+    let path = validated_path.as_path();
 
     // Ensure parent directory exists
     if let Some(parent) = path.parent() {
@@ -114,17 +123,27 @@ pub fn create_file(path: &str) -> Result<(), String> {
 
 /// Create a directory
 pub fn create_dir(path: &str) -> Result<(), String> {
+    // Validate path containment
+    let validated_path = validate_path(path)?;
+    let path = validated_path.as_path();
+
     std::fs::create_dir_all(path).map_err(|e| e.to_string())
 }
 
 /// Rename/move a file or directory
 pub fn rename(old_path: &str, new_path: &str) -> Result<(), String> {
-    std::fs::rename(old_path, new_path).map_err(|e| e.to_string())
+    // Validate both paths
+    let validated_old = validate_path(old_path)?;
+    let validated_new = validate_path(new_path)?;
+
+    std::fs::rename(validated_old, validated_new).map_err(|e| e.to_string())
 }
 
 /// Delete a file or directory
 pub fn delete(path: &str) -> Result<(), String> {
-    let path = Path::new(path);
+    // Validate path containment
+    let validated_path = validate_path(path)?;
+    let path = validated_path.as_path();
 
     if path.is_dir() {
         std::fs::remove_dir_all(path).map_err(|e| e.to_string())

@@ -1,6 +1,10 @@
 'use client';
 
 import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from 'react';
+import { invoke } from '@tauri-apps/api/core';
+import { initSecureStorage, setSecureItem, getSecureItem, clearSecureStorage, isSecureStorageInitialized } from '@/lib/secure-storage';
+import { tryLoginRateLimit, onLoginSuccessRateLimit, authRateLimiters } from '@/lib/rate-limiter';
+import { useSession } from '@/hooks/useSession';
 
 export interface User {
   id: string;
@@ -362,6 +366,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Hydrate from secure storage on mount (for session restoration)
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        // Try to get session token from secure storage
+        // Note: We need the password to decrypt, so this is for session restoration
+        // when the user has already unlocked the vault
+        if (isSecureStorageInitialized()) {
+          const authState = await getSecureItem<{ currentUser?: Partial<User>; timestamp: number }>('auth');
+          if (authState && mounted && authState.currentUser) {
+            // Check if session is recent (within 24 hours)
+            if (Date.now() - authState.timestamp < 24 * 60 * 60 * 1000) {
+              const user = normalizeUser(authState.currentUser);
+              setState(prev => ({
+                ...prev,
+                currentUser: user,
+                collaborators: prev.collaborators.filter(c => c.email !== user.email),
+              }));
+            }
+          }
+        }
+      } catch {
+        // Ignore decryption failures
+      }
+    })();
+    return () => { mounted = false; };
+  }, []);
+
   const persist = useCallback((s: AuthState) => {
     // `dwo_auth` is the *session* store — never carry credentials into it.
     // Password material lives only in `dwo_users`, hashed.
@@ -371,6 +404,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       collaborators: s.collaborators.map(withoutPassword),
     }));
   }, []);
+
+  // Rate limiters for auth operations
+  const loginRateLimit = {
+    tryLogin: () => tryLoginRateLimit('global'),
+    onLoginSuccess: () => onLoginSuccessRateLimit('global'),
+  };
+
+  // Session management
+  const { session, create: createSession, invalidate: invalidateSession, isValid } = useSession();
 
   const setVerification = useCallback((user: User | null, v: VerificationState | null) => {
     pendingUserRef.current = user;
@@ -395,7 +437,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setVerification(null, null);
   }, [setVerification]);
 
-  const signInWithGoogle = useCallback((profile: { email: string; name: string; picture: string }) => {
+  const signInWithGoogle = useCallback(async (profile: { email: string; name: string; picture: string }) => {
     const user = normalizeUser({
       email: profile.email,
       name: profile.name,
@@ -404,12 +446,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isVerified: true,
     });
     clearVerification();
+    
+    // Initialize secure storage (Google auth - use a session token)
+    const sessionToken = `google_${user.id}_${Date.now()}`;
+    await initSecureStorage(sessionToken);
+    
+    // Create backend session
+    await createSession(user.id, { email: user.email, name: user.name, provider: 'google' });
+    
+    // Store encrypted auth state
+    const authState = { currentUser: user, timestamp: Date.now(), provider: 'google' };
+    await setSecureItem('auth', authState);
+    
     setState(prev => {
       const next = { ...prev, currentUser: user, collaborators: prev.collaborators.filter(c => c.email !== user.email) };
       persist(next);
       return next;
     });
-  }, [persist, clearVerification]);
+  }, [persist, clearVerification, createSession]);
 
   const signInManually = useCallback((name: string, email: string) => {
     const existing = DEMO_USERS.find(u => u.email === email);
@@ -417,14 +471,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signInWithGoogle({ email, name: name || existing?.name || email.split('@')[0], picture });
   }, [signInWithGoogle]);
 
-  const signOut = useCallback(() => {
+  const signOut = useCallback(async () => {
     clearVerification();
+    
+    // Invalidate backend session
+    await invalidateSession();
+    
+    // Clear secure storage
+    clearSecureStorage();
+    
     setState(prev => {
       const next = { ...prev, currentUser: null };
       persist(next);
       return next;
     });
-  }, [persist, clearVerification]);
+  }, [persist, clearVerification, invalidateSession]);
 
   const generateInviteCode = useCallback(() => {
     setState(prev => {
@@ -482,6 +543,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const pwError = validatePassword(password);
     if (pwError) return { ok: false, error: pwError };
 
+    // Check registration rate limit (using email as identifier)
+    const registerLimiter = authRateLimiters.register(cleanEmail);
+    const allowed = registerLimiter.check();
+    const retryAfter = allowed ? undefined : Math.ceil(3600 / 3);
+    if (!allowed) {
+      return { ok: false, error: `Too many registration attempts. Please try again later.` };
+    }
+
     await delay(600); // simulate network round-trip
 
     const stored = readStoredUsers();
@@ -499,6 +568,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     writeStoredUsers([...stored, user]);
     issueCode(user);
+    
+    // Initialize secure storage for new user
+    await initSecureStorage(password);
+    
+    // Store encrypted auth state (pending verification)
+    const authState = { pendingUser: user, timestamp: Date.now() };
+    await setSecureItem('auth', authState);
+    
     return { ok: true };
   }, [issueCode]);
 
@@ -506,6 +583,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const cleanEmail = email.trim().toLowerCase();
     if (!EMAIL_RE.test(cleanEmail)) return { ok: false, error: 'Please enter a valid email address' };
     if (!password) return { ok: false, error: 'Please enter your password' };
+
+    // Check rate limit
+    const { allowed, retryAfter } = await loginRateLimit.tryLogin();
+    if (!allowed) {
+      return { ok: false, error: `Too many login attempts. Please try again in ${retryAfter || 12} seconds.` };
+    }
 
     await delay(600); // simulate network round-trip
 
@@ -548,13 +631,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     clearVerification();
+    
+    // Reset rate limiter on successful login
+    loginRateLimit.onLoginSuccess();
+    
+    // Initialize secure storage with password-derived key
+    await initSecureStorage(password);
+    
+    // Create backend session
+    await createSession(user.id, { email: user.email, name: user.name });
+    
+    // Store encrypted auth state
+    const authState = { currentUser: user, timestamp: Date.now() };
+    await setSecureItem('auth', authState);
+    
     setState(prev => {
       const next = { ...prev, currentUser: user, collaborators: prev.collaborators.filter(c => c.email !== user.email) };
       persist(next);
       return next;
     });
     return { ok: true };
-  }, [persist, issueCode, clearVerification]);
+  }, [persist, issueCode, clearVerification, loginRateLimit, createSession]);
 
   const verifyEmail = useCallback(async (code: string): Promise<AuthResult> => {
     const normalized = code.trim();
